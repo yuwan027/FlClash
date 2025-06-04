@@ -90,7 +90,7 @@ class AppEnvManager extends StatelessWidget {
     }
     if (globalState.isPre) {
       return Banner(
-        message: 'PRE',
+        message: '内测版本',
         location: BannerLocation.topEnd,
         child: child,
       );
