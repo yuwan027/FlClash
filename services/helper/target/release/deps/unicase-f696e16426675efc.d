@@ -1,0 +1,10 @@
+C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\deps\libunicase-f696e16426675efc.rmeta: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\ascii.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\unicode\mod.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\unicode\map.rs
+
+C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\deps\libunicase-f696e16426675efc.rlib: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\ascii.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\unicode\mod.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\unicode\map.rs
+
+C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\deps\unicase-f696e16426675efc.d: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\ascii.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\unicode\mod.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\unicode\map.rs
+
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\lib.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\ascii.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\unicode\mod.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\unicase-2.8.0\src\unicode\map.rs:

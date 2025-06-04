@@ -187,10 +187,18 @@ class Build {
       runInShell: runInShell,
     );
     process.stdout.listen((data) {
-      print(utf8.decode(data));
+      try {
+        print(utf8.decode(data, allowMalformed: true));
+      } catch (e) {
+        print("Warning: Failed to decode stdout: $e");
+      }
     });
     process.stderr.listen((data) {
-      print(utf8.decode(data));
+      try {
+        print(utf8.decode(data, allowMalformed: true));
+      } catch (e) {
+        print("Warning: Failed to decode stderr: $e");
+      }
     });
     final exitCode = await process.exitCode;
     if (exitCode != 0 && name != null) throw "$name error";
@@ -327,10 +335,26 @@ class Build {
       Build.getExecutable("flutter pub upgrade"),
       workingDirectory: distributorDir,
     );
+
+    final pubCacheBin = join(Platform.environment["LOCALAPPDATA"] ?? "", "Pub",
+        "Cache", "bin", "flutter_distributor.bat");
+
     await exec(
       name: "get distributor",
       Build.getExecutable("dart pub global activate -s path $distributorDir"),
     );
+
+    try {
+      await exec(
+        name: "verify distributor",
+        Build.getExecutable(pubCacheBin),
+        runInShell: true,
+      );
+    } catch (e) {
+      print(
+          "Warning: flutter_distributor not found in PATH. Please add ${Platform.environment["LOCALAPPDATA"]}\\Pub\\Cache\\bin to your system PATH");
+      rethrow;
+    }
   }
 
   static copyFile(String sourceFilePath, String destinationFilePath) {
@@ -506,8 +530,7 @@ class BuildCommand extends Command {
         _buildDistributor(
           target: target,
           targets: "exe,zip",
-          args:
-              " --description $archName --build-dart-define=CORE_SHA256=$token",
+          args: " --build-dart-define=CORE_SHA256=$token",
           env: env,
         );
         return;
@@ -526,8 +549,7 @@ class BuildCommand extends Command {
         _buildDistributor(
           target: target,
           targets: targets,
-          args:
-              " --description $archName --build-target-platform $defaultTarget",
+          args: " --build-target-platform $defaultTarget",
           env: env,
         );
         return;

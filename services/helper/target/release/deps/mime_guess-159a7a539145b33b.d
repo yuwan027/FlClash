@@ -1,0 +1,12 @@
+C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\deps\libmime_guess-159a7a539145b33b.rmeta: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\impl_bin_search.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\mime_types.rs C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\build\mime_guess-4c225f5642a389f8\out\mime_types_generated.rs
+
+C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\deps\libmime_guess-159a7a539145b33b.rlib: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\impl_bin_search.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\mime_types.rs C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\build\mime_guess-4c225f5642a389f8\out\mime_types_generated.rs
+
+C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\deps\mime_guess-159a7a539145b33b.d: C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\lib.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\impl_bin_search.rs C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\mime_types.rs C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\build\mime_guess-4c225f5642a389f8\out\mime_types_generated.rs
+
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\lib.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\impl_bin_search.rs:
+C:\Users\Administrator\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\mime_guess-2.0.5\src\mime_types.rs:
+C:\Users\Administrator\Desktop\WB\WBCli\FlClash\services\helper\target\release\build\mime_guess-4c225f5642a389f8\out\mime_types_generated.rs:
+
+# env-dep:MIME_TYPES_GENERATED_PATH=C:\\Users\\Administrator\\Desktop\\WB\\WBCli\\FlClash\\services\\helper\\target\\release\\build\\mime_guess-4c225f5642a389f8\\out\\mime_types_generated.rs
