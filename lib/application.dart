@@ -175,7 +175,7 @@ class ApplicationState extends ConsumerState<Application> {
                   primaryColor: themeProps.primaryColor,
                 ).toPureBlack(themeProps.pureBlack),
               ),
-              home: child,
+              home: const LoginPage(),
             );
           },
           child: const HomePage(),
