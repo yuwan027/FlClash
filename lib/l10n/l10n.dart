@@ -3328,6 +3328,8 @@ class AppLocalizations {
   String get zoom {
     return Intl.message('Zoom', name: 'zoom', desc: '', args: []);
   }
+
+  String get nodeList => '节点列表';
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

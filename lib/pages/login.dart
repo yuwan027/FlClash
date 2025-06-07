@@ -7,9 +7,9 @@ import 'package:window_manager/window_manager.dart';
 import '../config/app_config.dart';
 import '../common/http_client.dart';
 import '../l10n/l10n.dart';
+import '../utils/subscription_importer.dart';
 import 'subscription.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -124,81 +124,97 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
   }
 
   Future<void> _login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入邮箱和密码')),
-      );
-      return;
-    }
+    if (!mounted || _isLoading) return;
 
     setState(() {
       _isLoading = true;
+      _loginStatus = '正在发送登录请求...';
     });
+
+    final email = _emailController.text;
+    final password = _passwordController.text;
 
     try {
       final response = await HttpClient.post(
-        Uri.parse('${AppConfig.baseUrl}/api/v1/user/login'),
+        Uri.parse('${AppConfig.baseUrl}/api/v1/passport/auth/login'),
         headers: {
           'User-Agent': AppConfig.userAgent,
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'email': _emailController.text,
-          'password': _passwordController.text,
+          'email': email,
+          'password': password,
         }),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['data'] != null) {
+        if (data['data'] != null && data['data']['auth_data'] != null) {
+          final jwtToken = data['data']['auth_data'];
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('jwt_token', data['data']['token']);
-          await prefs.setString('user_info', jsonEncode(data['data']));
+          await prefs.setString('jwt_token', jwtToken);
+          await prefs.setString('email', email);
 
-          // 保存登录信息到缓存
-          await _saveLoginInfo(
-            _emailController.text,
-            _passwordController.text,
-            data['data']['avatar_url'] ?? '',
-          );
+          setState(() {
+            _loginStatus = '登录成功，正在获取用户信息...';
+          });
 
-          // 检查并导入订阅
-          if (data['data']['subscribe_url'] != null) {
-            final subscribeUrl = data['data']['subscribe_url'] as String;
-            final uri = Uri.parse(subscribeUrl);
-            final token = uri.queryParameters['token'];
+          // 获取用户信息
+          try {
+            await _getUserInfo(jwtToken);
 
-            if (token != null) {
-              final cachedToken = prefs.getString('last_subscribe_token');
-              if (cachedToken != token) {
-                // 新订阅或需要更新
-                await prefs.setString('last_subscribe_token', token);
-                // TODO: 调用订阅导入功能
-                // 这里需要调用其他页面的订阅导入功能
-              }
+            if (!mounted) return;
+
+            setState(() {
+              _loginStatus = '正在跳转...';
+            });
+
+            // 设置窗口大小
+            if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+              await windowManager.setSize(const Size(800, 700));
+              await windowManager.setResizable(true);
             }
-          }
 
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const SubscriptionPage()),
+            // 等待一小段时间确保提示显示
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const SubscriptionPage()),
+              );
+            }
+          } catch (e) {
+            if (!mounted) return;
+
+            setState(() {
+              _loginStatus = '获取用户信息失败';
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('获取用户信息失败，请重试')),
             );
           }
         }
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('登录失败，请检查账号密码')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
+        setState(() {
+          _loginStatus = '登录失败，请检查账号密码';
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('登录失败，请检查网络连接')),
+          const SnackBar(content: Text('登录失败，请检查邮箱和密码')),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loginStatus = '登录失败，网络问题';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('登录超时，请重试')),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -210,6 +226,7 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
 
   Future<void> _getUserInfo(String jwtToken) async {
     try {
+      print('开始获取用户信息...');
       final response = await HttpClient.get(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/info'),
         headers: {
@@ -221,6 +238,7 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
+        print('获取用户信息成功，开始解析数据...');
         final data = jsonDecode(response.body);
         if (data['data'] != null) {
           final prefs = await SharedPreferences.getInstance();
