@@ -10,28 +10,94 @@ import '../l10n/l10n.dart';
 import '../utils/subscription_importer.dart';
 import 'login.dart';
 import 'node_list.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_clash/providers/app.dart';
+import '../controller.dart';
+import '../providers/network.dart' as network;
+import '../providers/clash.dart' as clash;
+import '../providers/state.dart';
+import '../providers/config.dart';
+import 'traffic_log.dart';
+import 'plan.dart';
+import 'order.dart';
+import 'dart:async';
 
-class SubscriptionPage extends StatefulWidget {
+class SubscriptionPage extends ConsumerStatefulWidget {
   const SubscriptionPage({super.key});
 
   @override
-  State<SubscriptionPage> createState() => _SubscriptionPageState();
+  ConsumerState<SubscriptionPage> createState() => _SubscriptionPageState();
 }
 
-class _SubscriptionPageState extends State<SubscriptionPage> {
+class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   Map<String, dynamic>? _userInfo;
   Map<String, dynamic>? _subscriptionInfo;
   final TextEditingController _transferAmountController =
       TextEditingController();
-  bool _isLoading = false;
+  bool _isLoading = true;
   String _balance = '0.00';
   String _commission = '0.00';
+  bool _hasLoadedSubscription = false;
+  String? _error;
+  String? _subscriptionUrl;
+  late AppController _controller;
 
   @override
   void initState() {
     super.initState();
-    _loadUserInfo();
-    _loadSubscriptionInfo();
+    _loadCachedData();
+    _controller = AppController(context, ref);
+
+    // 只在初始化时设置窗口大小
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        windowManager.getSize().then((size) {
+          if (size.width < 600) {
+            windowManager.setSize(const Size(800, 700));
+          }
+        });
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  Future<void> _loadCachedData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // 加载缓存的用户信息
+      final cachedUserInfo = prefs.getString('user_info');
+      if (cachedUserInfo != null) {
+        _userInfo = jsonDecode(cachedUserInfo);
+        _balance = _formatBalance(_userInfo!['balance']);
+        _commission = _formatBalance(_userInfo!['commission_balance']);
+      }
+
+      // 加载缓存的订阅信息
+      final cachedSubscriptionInfo = prefs.getString('subscription_info');
+      if (cachedSubscriptionInfo != null) {
+        _subscriptionInfo = jsonDecode(cachedSubscriptionInfo);
+      }
+      _subscriptionUrl = prefs.getString('subscription_url');
+      _hasLoadedSubscription = true;
+    } catch (e) {
+      print('加载缓存数据失败: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+      // 加载完缓存后立即请求最新数据
+      _loadUserInfo();
+      _loadSubscription();
+    }
   }
 
   Future<void> _loadUserInfo() async {
@@ -40,10 +106,12 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     if (jwtToken == null) return;
 
     try {
-      print('开始加载用户信息...');
+      print('开始加载用户info信息...');
       final response = await HttpClient.get(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/info'),
         headers: {'Authorization': jwtToken, 'User-Agent': AppConfig.userAgent},
+        timeout: const Duration(seconds: 8),
+        retries: 3,
       );
 
       if (response.statusCode == 200) {
@@ -66,55 +134,78 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     }
   }
 
-  Future<void> _loadSubscriptionInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jwtToken = prefs.getString('jwt_token');
-    if (jwtToken == null) return;
+  Future<void> _loadSubscription() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
-      print('开始加载订阅信息...');
+      final prefs = await SharedPreferences.getInstance();
+      final jwtToken = prefs.getString('jwt_token');
+      if (jwtToken == null) return;
+
+      print('开始加载用户getSubscribe信息...');
+      print('请求URL: ${AppConfig.baseUrl}/api/v1/user/getSubscribe');
+      print(
+          '请求头: Authorization: $jwtToken, User-Agent: ${AppConfig.userAgent}');
+
       final response = await HttpClient.get(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/getSubscribe'),
-        headers: {'Authorization': jwtToken, 'User-Agent': AppConfig.userAgent},
+        headers: {
+          'Authorization': jwtToken,
+          'User-Agent': AppConfig.userAgent,
+        },
+        timeout: const Duration(seconds: 8),
+        retries: 3,
       );
+
+      print('响应状态码: ${response.statusCode}');
+      print('响应体: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['data'] != null && data['data']['subscribe_url'] != null) {
-          final subscribeUrl = data['data']['subscribe_url'] as String;
-          print('获取到订阅链接: $subscribeUrl');
-
-          // 保存或使用订阅链接
+        if (data['data'] != null) {
           setState(() {
             _subscriptionInfo = data['data'];
           });
 
-          // 检查是否需要更新订阅
-          final lastUpdateTime = prefs.getInt('last_subscription_update');
-          final now = DateTime.now().millisecondsSinceEpoch;
-          final shouldUpdate = lastUpdateTime == null ||
-              (now - lastUpdateTime) > 3600000; // 1小时更新一次
+          // 检查是否需要更新订阅链接
+          final newSubscribeUrl = data['data']['subscribe_url'];
+          if (newSubscribeUrl != null && newSubscribeUrl != _subscriptionUrl) {
+            print('需要更新订阅链接');
+            print('新订阅链接: $newSubscribeUrl');
+            print('旧订阅链接: $_subscriptionUrl');
 
-          if (shouldUpdate) {
-            // 直接导入订阅
+            // 导入新订阅
             final success =
-                await SubscriptionImporter.importFromUrl(subscribeUrl);
-            print('导入订阅结果: $success');
-
-            if (success && mounted) {
-              // 保存更新时间
-              await prefs.setInt('last_subscription_update', now);
-              _showSuccessSnackBar('订阅导入成功');
+                await SubscriptionImporter.importFromUrl(newSubscribeUrl);
+            if (success) {
+              _subscriptionUrl = newSubscribeUrl;
+              await prefs.setString('subscription_url', _subscriptionUrl!);
+              await prefs.setString(
+                  'subscription_info', jsonEncode(data['data']));
+            } else {
+              _error = '导入订阅失败';
             }
           } else {
-            print('订阅已是最新，无需更新');
+            // 不需要更新订阅链接，只更新订阅信息
+            await prefs.setString(
+                'subscription_info', jsonEncode(data['data']));
           }
         } else {
-          print('未获取到有效的订阅链接');
+          _error = '获取订阅信息失败';
         }
+      } else {
+        _error = '获取订阅信息失败: ${response.statusCode}';
       }
     } catch (e) {
-      print('获取订阅信息失败: $e');
+      print('加载订阅信息失败: $e');
+      _error = '加载订阅信息失败: $e';
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -125,6 +216,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
+        width: MediaQuery.of(context).size.width * 0.5,
       ),
     );
   }
@@ -144,8 +236,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   }
 
   double _calculateUsagePercentage() {
-    if (_subscriptionInfo == null || _userInfo == null) return 0;
-    final total = _userInfo!['transfer_enable'] as int;
+    if (_subscriptionInfo == null) return 0;
+    final total = _subscriptionInfo!['transfer_enable'] as int;
     final used =
         (_subscriptionInfo!['u'] as int) + (_subscriptionInfo!['d'] as int);
     return used / total;
@@ -162,8 +254,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   }
 
   String _getRemainingTraffic() {
-    if (_subscriptionInfo == null || _userInfo == null) return '0 B';
-    final total = _userInfo!['transfer_enable'] as int;
+    if (_subscriptionInfo == null) return '0 B';
+    final total = _subscriptionInfo!['transfer_enable'] as int;
     final used =
         (_subscriptionInfo!['u'] as int) + (_subscriptionInfo!['d'] as int);
     return _formatBytes(total - used);
@@ -254,33 +346,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         _transferAmountController.clear();
 
         // 立即请求用户信息更新余额和佣金
-        try {
-          final userInfoResponse = await HttpClient.get(
-            Uri.parse('${AppConfig.baseUrl}/api/v1/user/info'),
-            headers: {
-              'Authorization': jwtToken,
-              'User-Agent': AppConfig.userAgent,
-            },
-          );
-
-          if (userInfoResponse.statusCode == 200) {
-            final data = jsonDecode(userInfoResponse.body);
-            if (data['data'] != null) {
-              await prefs.setString('user_info', jsonEncode(data['data']));
-              if (mounted) {
-                setState(() {
-                  _userInfo = data['data'];
-                  _balance = _formatBalance(_userInfo!['balance']);
-                  _commission = _formatBalance(
-                    _userInfo!['commission_balance'],
-                  );
-                });
-              }
-            }
-          }
-        } catch (e) {
-          print('更新用户信息失败: $e');
-        }
+        await _loadUserInfo();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context).transferFailed)),
@@ -299,20 +365,58 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     }
   }
 
+  Future<void> _toggleSystemProxy(bool value) async {
+    print('切换系统代理: $value');
+    try {
+      // 先更新系统代理状态
+      ref.read(networkSettingProvider.notifier).updateState((state) {
+        return state.copyWith(systemProxy: value);
+      });
+
+      // 获取当前选中的节点
+      final prefs = await SharedPreferences.getInstance();
+      final selectedNode = prefs.getString('selected_node');
+
+      if (value && selectedNode != null) {
+        // 如果开启系统代理且有选中的节点，确保使用该节点
+        print('使用选中的节点: $selectedNode');
+        // 这里可以添加设置选中节点的逻辑
+      }
+
+      _controller.updateClashConfigDebounce();
+      print('系统代理状态已更新: $value');
+    } catch (e) {
+      print('切换系统代理失败: $e');
+    }
+  }
+
+  void _toggleTunMode(bool value) {
+    print('切换TUN模式: $value');
+    try {
+      ref.read(clash.patchClashConfigProvider.notifier).updateState((config) {
+        return config.copyWith(
+          tun: config.tun.copyWith(enable: value),
+        );
+      });
+      _controller.updateClashConfigDebounce();
+      print('TUN模式状态已更新: $value');
+    } catch (e) {
+      print('切换TUN模式失败: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_userInfo == null) {
+    final isSystemProxyEnabled = ref.watch(networkSettingProvider).systemProxy;
+    final isTunEnabled = ref.watch(clash.patchClashConfigProvider).tun.enable;
+    if (_userInfo == null || _subscriptionInfo == null) {
       return const Center(child: CircularProgressIndicator());
-    }
-
-    // 设置窗口大小
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      windowManager.setSize(const Size(800, 700));
     }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.of(context).subscriptionInfo),
+        automaticallyImplyLeading: false,
         actions: [
           PopupMenuButton<String>(
             position: PopupMenuPosition.under,
@@ -328,6 +432,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(_userInfo!['email'] ?? ''),
+                  const SizedBox(width: 8),
                   const Icon(Icons.arrow_drop_down),
                 ],
               ),
@@ -471,252 +576,355 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Card(
-                    child: Container(
-                      width: 420,
-                      height: 460,
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_subscriptionInfo != null &&
-                              _subscriptionInfo!['plan'] != null) ...[
-                            Text(
-                              '${AppLocalizations.of(context).currentPlan}: ${_subscriptionInfo!['plan']['name']}',
-                              style: Theme.of(context).textTheme.titleLarge,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                if (_shouldShowWarning())
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 4),
-                                    child: Text(
-                                      '⚠️',
-                                      style: TextStyle(fontSize: 14),
-                                    ),
-                                  ),
-                                Expanded(
-                                  child: Text(
-                                    _getExpiryText(),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(color: _getExpiryColor()),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                          if (_subscriptionInfo != null) ...[
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.arrow_upward,
-                                  size: 16,
-                                  color: Colors.green[700],
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    '${AppLocalizations.of(context).usedUpload}: ${_formatBytes(_subscriptionInfo!['u'])}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(
-                                  Icons.arrow_downward,
-                                  size: 16,
-                                  color: Colors.blue[700],
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    '${AppLocalizations.of(context).usedDownload}: ${_formatBytes(_subscriptionInfo!['d'])}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: LinearProgressIndicator(
-                                    value: _calculateUsagePercentage(),
-                                    backgroundColor: Colors.grey[200],
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      _getProgressColor(
-                                        _calculateUsagePercentage(),
-                                      ),
-                                    ),
-                                    minHeight: 8,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${AppLocalizations.of(context).totalTraffic}: ${_formatBytes(_userInfo!['transfer_enable'])}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(color: Colors.grey[600]),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    '剩余: ${_getRemainingTraffic()}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(color: Colors.grey[600]),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.right,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                          if (_subscriptionInfo != null &&
-                              _subscriptionInfo!['plan'] != null &&
-                              _subscriptionInfo!['plan']['content'] !=
-                                  null) ...[
-                            const Divider(),
-                            const SizedBox(height: 8),
-                            Text(
-                              '订阅介绍',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 8),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          _hasLoadedSubscription = false;
+                          _loadSubscription();
+                        },
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                )
+              : Column(
+                  children: [
+                    // 主体内容
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 左侧套餐信息
                             Expanded(
-                              child: SingleChildScrollView(
-                                child: Html(
-                                  data: _subscriptionInfo!['plan']['content'],
-                                  style: {
-                                    'body': Style(
-                                      margin: Margins.zero,
-                                      padding: HtmlPaddings.zero,
-                                      fontSize: FontSize(14),
-                                      color: Colors.grey[600],
-                                    ),
-                                    'font': Style(color: Colors.grey[600]),
-                                    'p': Style(
-                                      margin: Margins.zero,
-                                      padding: HtmlPaddings.zero,
-                                    ),
-                                    'br': Style(
-                                      margin: Margins.zero,
-                                      padding: HtmlPaddings.zero,
-                                    ),
-                                  },
+                              child: Container(
+                                height: 540,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Theme.of(context).dividerColor,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (_subscriptionInfo != null &&
+                                        _subscriptionInfo!['plan'] != null) ...[
+                                      Text(
+                                        '${AppLocalizations.of(context).currentPlan}: ${_subscriptionInfo!['plan']['name']}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          if (_shouldShowWarning())
+                                            const Padding(
+                                              padding:
+                                                  EdgeInsets.only(right: 4),
+                                              child: Text(
+                                                '⚠️',
+                                                style: TextStyle(fontSize: 14),
+                                              ),
+                                            ),
+                                          Expanded(
+                                            child: Text(
+                                              _getExpiryText(),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                      color: _getExpiryColor()),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                    ],
+                                    if (_subscriptionInfo != null) ...[
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.arrow_upward,
+                                            size: 16,
+                                            color: Colors.green[700],
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              '${AppLocalizations.of(context).usedUpload}: ${_formatBytes(_subscriptionInfo!['u'])}',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            Icons.arrow_downward,
+                                            size: 16,
+                                            color: Colors.blue[700],
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              '${AppLocalizations.of(context).usedDownload}: ${_formatBytes(_subscriptionInfo!['d'])}',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Stack(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                            child: LinearProgressIndicator(
+                                              value:
+                                                  _calculateUsagePercentage(),
+                                              backgroundColor: Colors.grey[200],
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                _getProgressColor(
+                                                  _calculateUsagePercentage(),
+                                                ),
+                                              ),
+                                              minHeight: 8,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              '${AppLocalizations.of(context).totalTraffic}: ${_formatBytes(_subscriptionInfo!['transfer_enable'])}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                      color: Colors.grey[600]),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              '剩余: ${_getRemainingTraffic()}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                      color: Colors.grey[600]),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.right,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                    ],
+                                    if (_subscriptionInfo != null &&
+                                        _subscriptionInfo!['plan'] != null &&
+                                        _subscriptionInfo!['plan']['content'] !=
+                                            null) ...[
+                                      const Divider(),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '订阅介绍',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          child: Html(
+                                            data: _subscriptionInfo!['plan']
+                                                ['content'],
+                                            style: {
+                                              'body': Style(
+                                                margin: Margins.zero,
+                                                padding: HtmlPaddings.zero,
+                                                fontSize: FontSize(14),
+                                                color: Colors.grey[600],
+                                              ),
+                                              'font': Style(
+                                                  color: Colors.grey[600]),
+                                              'p': Style(
+                                                margin: Margins.zero,
+                                                padding: HtmlPaddings.zero,
+                                              ),
+                                              'br': Style(
+                                                margin: Margins.zero,
+                                                padding: HtmlPaddings.zero,
+                                              ),
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 16),
+                            // 右侧代理设置
+                            Container(
+                              width: 280,
+                              height: 200,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Theme.of(context).dividerColor,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '代理设置',
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Switch(
+                                        value: isSystemProxyEnabled,
+                                        onChanged: _toggleSystemProxy,
+                                        activeColor: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text('系统代理'),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Switch(
+                                        value: isTunEnabled,
+                                        onChanged: _toggleTunMode,
+                                        activeColor: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text('TUN模式'),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
+                        ),
+                      ),
+                    ),
+                    // 页脚
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        border: Border(
+                          top: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => NodeListPage(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.list_alt),
+                            label: const Text('节点选择'),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const TrafficLogPage(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.show_chart),
+                            label: const Text('流量记录'),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const PlanPage(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.shopping_cart),
+                            label: const Text('购买套餐'),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const OrderPage(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.receipt_long),
+                            label: const Text('订单管理'),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, -1),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundImage: NetworkImage(
-                            _userInfo!['avatar_url'] ?? '',
-                          ),
-                          radius: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _userInfo!['email'] ?? '',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                    TextButton.icon(
-                      onPressed: () {
-                        print('开始切换到节点列表页面...');
-                        try {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) {
-                                print('创建节点列表页面...');
-                                return NodeListPage();
-                              },
-                            ),
-                          );
-                          print('页面切换完成');
-                        } catch (e, stackTrace) {
-                          print('页面切换失败: $e');
-                          print('错误堆栈: $stackTrace');
-                        }
-                      },
-                      icon: const Icon(Icons.list_alt),
-                      label: const Text('节点列表'),
-                    ),
                   ],
                 ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

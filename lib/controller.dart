@@ -30,8 +30,10 @@ class AppController {
   AppController(this.context, WidgetRef ref) : _ref = ref;
 
   updateClashConfigDebounce() {
+    print('[FlClash] 开始更新Clash配置');
     debouncer.call(DebounceTag.updateClashConfig, () async {
       final isPatch = globalState.appState.needApply ? false : true;
+      print('[FlClash] 更新Clash配置，isPatch: $isPatch');
       await updateClashConfig(isPatch);
     });
   }
@@ -740,18 +742,24 @@ class AppController {
     });
   }
 
-  updateTun() {
+  void updateTun() {
+    print('[FlClash] 开始更新TUN模式状态');
     _ref.read(patchClashConfigProvider.notifier).updateState(
-          (state) => state.copyWith.tun(enable: !state.tun.enable),
-        );
-  }
-
-  updateSystemProxy() {
-    _ref.read(networkSettingProvider.notifier).updateState(
           (state) => state.copyWith(
-            systemProxy: !state.systemProxy,
+            tun: state.tun.copyWith(enable: !state.tun.enable),
           ),
         );
+    print('[FlClash] TUN模式状态已更新，准备应用配置');
+    updateClashConfigDebounce();
+  }
+
+  void updateSystemProxy() {
+    print('[FlClash] 开始更新系统代理状态');
+    _ref.read(networkSettingProvider.notifier).updateState(
+          (state) => state.copyWith(systemProxy: !state.systemProxy),
+        );
+    print('[FlClash] 系统代理状态已更新，准备应用配置');
+    updateClashConfigDebounce();
   }
 
   updateStart() {
