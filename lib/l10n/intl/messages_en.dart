@@ -20,7 +20,13 @@ typedef String MessageIfAbsent(String messageStr, List<dynamic> args);
 class MessageLookup extends MessageLookupByLibrary {
   String get localeName => 'en';
 
-  static String m0(count) => "${count} items have been selected";
+  static String m0(statusCode) => "Failed to get user info: ${statusCode}";
+
+  static String m1(count) => "${count} items have been selected";
+
+  static String m2(balance) => "Your balance: ${balance} CNY";
+
+  static String m3(commission) => "Your commission: ${commission} CNY";
 
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
@@ -120,6 +126,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Sync data via WebDAV or file",
     ),
     "backupSuccess": MessageLookupByLibrary.simpleMessage("Backup success"),
+    "balanceTransfer": MessageLookupByLibrary.simpleMessage("Balance Transfer"),
     "basicConfig": MessageLookupByLibrary.simpleMessage("Basic configuration"),
     "basicConfigDesc": MessageLookupByLibrary.simpleMessage(
       "Modify the basic configuration globally",
@@ -164,7 +171,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "View current connections data",
     ),
     "connectivity": MessageLookupByLibrary.simpleMessage("Connectivity："),
-    "contactMe": MessageLookupByLibrary.simpleMessage("Contact me"),
+    "contactMe": MessageLookupByLibrary.simpleMessage("Contact Me"),
     "content": MessageLookupByLibrary.simpleMessage("Content"),
     "contentEmptyTip": MessageLookupByLibrary.simpleMessage(
       "Content cannot be empty",
@@ -181,6 +188,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "country": MessageLookupByLibrary.simpleMessage("Country"),
     "crashTest": MessageLookupByLibrary.simpleMessage("Crash test"),
     "create": MessageLookupByLibrary.simpleMessage("Create"),
+    "currentPlan": MessageLookupByLibrary.simpleMessage("Current Plan"),
     "cut": MessageLookupByLibrary.simpleMessage("Cut"),
     "dark": MessageLookupByLibrary.simpleMessage("Dark"),
     "dashboard": MessageLookupByLibrary.simpleMessage("Dashboard"),
@@ -238,6 +246,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "edit": MessageLookupByLibrary.simpleMessage("Edit"),
     "en": MessageLookupByLibrary.simpleMessage("English"),
     "enableOverride": MessageLookupByLibrary.simpleMessage("Enable override"),
+    "enterValidAmount": MessageLookupByLibrary.simpleMessage(
+      "Please enter a valid amount",
+    ),
     "entries": MessageLookupByLibrary.simpleMessage(" entries"),
     "exclude": MessageLookupByLibrary.simpleMessage("Hidden from recent tasks"),
     "excludeDesc": MessageLookupByLibrary.simpleMessage(
@@ -362,9 +373,32 @@ class MessageLookup extends MessageLookupByLibrary {
     "logcatDesc": MessageLookupByLibrary.simpleMessage(
       "Disabling will hide the log entry",
     ),
+    "loginFailedCheckCredentials": MessageLookupByLibrary.simpleMessage(
+      "Login failed, please check your credentials",
+    ),
+    "loginFailedEmptyUserInfo": MessageLookupByLibrary.simpleMessage(
+      "User info is empty",
+    ),
+    "loginFailedGetUserInfo": MessageLookupByLibrary.simpleMessage(
+      "Failed to get user info",
+    ),
+    "loginFailedGetUserInfoRetry": MessageLookupByLibrary.simpleMessage(
+      "Failed to get user info, please retry",
+    ),
+    "loginFailedGetUserInfoStatus": m0,
+    "loginFailedNetwork": MessageLookupByLibrary.simpleMessage(
+      "Login failed, network issue",
+    ),
+    "loginRedirecting": MessageLookupByLibrary.simpleMessage("Redirecting..."),
+    "loginSendingRequest": MessageLookupByLibrary.simpleMessage(
+      "Sending login request...",
+    ),
+    "loginSuccessGettingInfo": MessageLookupByLibrary.simpleMessage(
+      "Login successful, getting user info...",
+    ),
     "logs": MessageLookupByLibrary.simpleMessage("Logs"),
     "logsDesc": MessageLookupByLibrary.simpleMessage("Log capture records"),
-    "logsTest": MessageLookupByLibrary.simpleMessage("Logs test"),
+    "logsTest": MessageLookupByLibrary.simpleMessage("Logs Test"),
     "loopback": MessageLookupByLibrary.simpleMessage("Loopback unlock tool"),
     "loopbackDesc": MessageLookupByLibrary.simpleMessage(
       "Used for UWP loopback unlocking",
@@ -412,7 +446,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "noInfo": MessageLookupByLibrary.simpleMessage("No info"),
     "noMoreInfoDesc": MessageLookupByLibrary.simpleMessage("No more info"),
     "noNetwork": MessageLookupByLibrary.simpleMessage("No network"),
-    "noNetworkApp": MessageLookupByLibrary.simpleMessage("No network APP"),
+    "noNetworkApp": MessageLookupByLibrary.simpleMessage("No Network App"),
     "noProxy": MessageLookupByLibrary.simpleMessage("No proxy"),
     "noProxyDesc": MessageLookupByLibrary.simpleMessage(
       "Please create a profile or add a valid profile",
@@ -541,7 +575,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Only recovery profiles",
     ),
     "recoveryStrategy": MessageLookupByLibrary.simpleMessage(
-      "Recovery strategy",
+      "Recovery Strategy",
     ),
     "recoveryStrategy_compatible": MessageLookupByLibrary.simpleMessage(
       "Compatible",
@@ -605,7 +639,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "seconds": MessageLookupByLibrary.simpleMessage("Seconds"),
     "selectAll": MessageLookupByLibrary.simpleMessage("Select all"),
     "selected": MessageLookupByLibrary.simpleMessage("Selected"),
-    "selectedCountTitle": m0,
+    "selectedCountTitle": m1,
     "settings": MessageLookupByLibrary.simpleMessage("Settings"),
     "show": MessageLookupByLibrary.simpleMessage("Show"),
     "shrink": MessageLookupByLibrary.simpleMessage("Shrink"),
@@ -633,9 +667,12 @@ class MessageLookup extends MessageLookupByLibrary {
       "Sub rule content cannot be empty",
     ),
     "submit": MessageLookupByLibrary.simpleMessage("Submit"),
+    "subscriptionInfo": MessageLookupByLibrary.simpleMessage(
+      "Subscription Info",
+    ),
     "sync": MessageLookupByLibrary.simpleMessage("Sync"),
     "system": MessageLookupByLibrary.simpleMessage("System"),
-    "systemApp": MessageLookupByLibrary.simpleMessage("System APP"),
+    "systemApp": MessageLookupByLibrary.simpleMessage("System App"),
     "systemFont": MessageLookupByLibrary.simpleMessage("System font"),
     "systemProxy": MessageLookupByLibrary.simpleMessage("System proxy"),
     "systemProxyDesc": MessageLookupByLibrary.simpleMessage(
@@ -651,7 +688,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Enabling it will allow TCP concurrency",
     ),
     "testUrl": MessageLookupByLibrary.simpleMessage("Test url"),
-    "textScale": MessageLookupByLibrary.simpleMessage("Text Scaling"),
+    "textScale": MessageLookupByLibrary.simpleMessage("Text Scale"),
     "theme": MessageLookupByLibrary.simpleMessage("Theme"),
     "themeColor": MessageLookupByLibrary.simpleMessage("Theme color"),
     "themeDesc": MessageLookupByLibrary.simpleMessage(
@@ -665,7 +702,15 @@ class MessageLookup extends MessageLookupByLibrary {
     "toggle": MessageLookupByLibrary.simpleMessage("Toggle"),
     "tonalSpotScheme": MessageLookupByLibrary.simpleMessage("TonalSpot"),
     "tools": MessageLookupByLibrary.simpleMessage("Tools"),
+    "totalTraffic": MessageLookupByLibrary.simpleMessage("Total Traffic"),
     "trafficUsage": MessageLookupByLibrary.simpleMessage("Traffic usage"),
+    "transfer": MessageLookupByLibrary.simpleMessage("Transfer"),
+    "transferFailed": MessageLookupByLibrary.simpleMessage(
+      "Balance transfer failed",
+    ),
+    "transferSuccess": MessageLookupByLibrary.simpleMessage(
+      "Balance transfer successful",
+    ),
     "tun": MessageLookupByLibrary.simpleMessage("TUN"),
     "tunDesc": MessageLookupByLibrary.simpleMessage(
       "only effective in administrator mode",
@@ -679,6 +724,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "unifiedDelayDesc": MessageLookupByLibrary.simpleMessage(
       "Remove extra delays such as handshaking",
     ),
+    "unitYuan": MessageLookupByLibrary.simpleMessage("Unit: Yuan"),
     "unknown": MessageLookupByLibrary.simpleMessage("Unknown"),
     "update": MessageLookupByLibrary.simpleMessage("Update"),
     "upload": MessageLookupByLibrary.simpleMessage("Upload"),
@@ -688,6 +734,8 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "useHosts": MessageLookupByLibrary.simpleMessage("Use hosts"),
     "useSystemHosts": MessageLookupByLibrary.simpleMessage("Use system hosts"),
+    "usedDownload": MessageLookupByLibrary.simpleMessage("Used Download"),
+    "usedUpload": MessageLookupByLibrary.simpleMessage("Used Upload"),
     "value": MessageLookupByLibrary.simpleMessage("Value"),
     "valueExists": MessageLookupByLibrary.simpleMessage(
       "The current value already exists",
@@ -711,6 +759,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "whitelistMode": MessageLookupByLibrary.simpleMessage("Whitelist mode"),
     "years": MessageLookupByLibrary.simpleMessage("Years"),
+    "yourBalance": m2,
+    "yourCommission": m3,
     "zh_CN": MessageLookupByLibrary.simpleMessage("Simplified Chinese"),
+    "zoom": MessageLookupByLibrary.simpleMessage("Zoom"),
   };
 }

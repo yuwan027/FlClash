@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_html/flutter_html.dart';
 import '../config/app_config.dart';
+import '../common/http_client.dart';
 import '../l10n/l10n.dart';
+import 'login.dart';
 
 class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});
@@ -18,6 +20,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   final TextEditingController _transferAmountController =
       TextEditingController();
   bool _isLoading = false;
+  String _balance = '0.00';
+  String _commission = '0.00';
 
   @override
   void initState() {
@@ -28,11 +32,33 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
   Future<void> _loadUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
-    final userInfoStr = prefs.getString('user_info');
-    if (userInfoStr != null) {
-      setState(() {
-        _userInfo = jsonDecode(userInfoStr);
-      });
+    final jwtToken = prefs.getString('jwt_token');
+    if (jwtToken == null) return;
+
+    try {
+      final response = await HttpClient.get(
+        Uri.parse('${AppConfig.baseUrl}/api/v1/user/info'),
+        headers: {
+          'Authorization': jwtToken,
+          'User-Agent': AppConfig.userAgent,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['data'] != null) {
+          await prefs.setString('user_info', jsonEncode(data['data']));
+          if (mounted) {
+            setState(() {
+              _userInfo = data['data'];
+              _balance = _formatBalance(_userInfo!['balance']);
+              _commission = _formatBalance(_userInfo!['commission_balance']);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('获取用户信息失败: $e');
     }
   }
 
@@ -42,12 +68,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     if (jwtToken == null) return;
 
     try {
-      final response = await http.get(
+      final response = await HttpClient.get(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/getSubscribe'),
-        headers: {
-          'User-Agent': AppConfig.userAgent,
-          'Authorization': 'Bearer $jwtToken',
-        },
+        headers: {'Authorization': jwtToken, 'User-Agent': AppConfig.userAgent},
       );
 
       if (response.statusCode == 200) {
@@ -77,6 +100,77 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     return (balance / 100).toStringAsFixed(2);
   }
 
+  double _calculateUsagePercentage() {
+    if (_subscriptionInfo == null || _userInfo == null) return 0;
+    final total = _userInfo!['transfer_enable'] as int;
+    final used =
+        (_subscriptionInfo!['u'] as int) + (_subscriptionInfo!['d'] as int);
+    return used / total;
+  }
+
+  Color _getProgressColor(double percentage) {
+    if (percentage < 0.5) {
+      return Colors.green;
+    } else if (percentage < 0.8) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
+  }
+
+  String _getRemainingTraffic() {
+    if (_subscriptionInfo == null || _userInfo == null) return '0 B';
+    final total = _userInfo!['transfer_enable'] as int;
+    final used =
+        (_subscriptionInfo!['u'] as int) + (_subscriptionInfo!['d'] as int);
+    return _formatBytes(total - used);
+  }
+
+  String _getExpiryText() {
+    if (_userInfo == null || _userInfo!['expired_at'] == null) {
+      return '该订阅永不到期';
+    }
+
+    final expiredAt =
+        DateTime.fromMillisecondsSinceEpoch(_userInfo!['expired_at'] * 1000);
+    final now = DateTime.now();
+    final difference = expiredAt.difference(now).inDays;
+
+    if (difference <= 0) {
+      return '该订阅已过期';
+    }
+    return '该订阅剩余$difference天到期';
+  }
+
+  Color _getExpiryColor() {
+    if (_userInfo == null || _userInfo!['expired_at'] == null) {
+      return Colors.grey[600]!;
+    }
+
+    final expiredAt =
+        DateTime.fromMillisecondsSinceEpoch(_userInfo!['expired_at'] * 1000);
+    final now = DateTime.now();
+    final difference = expiredAt.difference(now).inDays;
+
+    if (difference <= 7) {
+      return Colors.red;
+    }
+    return Colors.grey[600]!;
+  }
+
+  bool _shouldShowWarning() {
+    if (_userInfo == null || _userInfo!['expired_at'] == null) {
+      return false;
+    }
+
+    final expiredAt =
+        DateTime.fromMillisecondsSinceEpoch(_userInfo!['expired_at'] * 1000);
+    final now = DateTime.now();
+    final difference = expiredAt.difference(now).inDays;
+
+    return difference <= 7;
+  }
+
   Future<void> _transferBalance() async {
     if (_transferAmountController.text.isEmpty) return;
 
@@ -97,16 +191,14 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       final jwtToken = prefs.getString('jwt_token');
       if (jwtToken == null) return;
 
-      final response = await http.post(
+      final response = await HttpClient.post(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/transfer'),
         headers: {
+          'Authorization': jwtToken,
           'User-Agent': AppConfig.userAgent,
-          'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'transfer_amount': (amount * 100).toInt(),
-        }),
+        body: jsonEncode({'transfer_amount': (amount * 100).toInt()}),
       );
 
       if (response.statusCode == 200) {
@@ -114,7 +206,35 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           SnackBar(content: Text(AppLocalizations.of(context).transferSuccess)),
         );
         _transferAmountController.clear();
-        await _loadUserInfo();
+
+        // 立即请求用户信息更新余额和佣金
+        try {
+          final userInfoResponse = await HttpClient.get(
+            Uri.parse('${AppConfig.baseUrl}/api/v1/user/info'),
+            headers: {
+              'Authorization': jwtToken,
+              'User-Agent': AppConfig.userAgent,
+            },
+          );
+
+          if (userInfoResponse.statusCode == 200) {
+            final data = jsonDecode(userInfoResponse.body);
+            if (data['data'] != null) {
+              await prefs.setString('user_info', jsonEncode(data['data']));
+              if (mounted) {
+                setState(() {
+                  _userInfo = data['data'];
+                  _balance = _formatBalance(_userInfo!['balance']);
+                  _commission = _formatBalance(
+                    _userInfo!['commission_balance'],
+                  );
+                });
+              }
+            }
+          }
+        } catch (e) {
+          print('更新用户信息失败: $e');
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context).transferFailed)),
@@ -125,9 +245,11 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         SnackBar(content: Text(AppLocalizations.of(context).transferFailed)),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -142,29 +264,156 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         title: Text(AppLocalizations.of(context).subscriptionInfo),
         actions: [
           PopupMenuButton<String>(
+            position: PopupMenuPosition.under,
+            offset: const Offset(0, 8),
             child: Padding(
               padding: const EdgeInsets.all(8.0),
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundImage:
-                        NetworkImage(_userInfo!['avatar_url'] ?? ''),
+                    backgroundImage: NetworkImage(
+                      _userInfo!['avatar_url'] ?? '',
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(_userInfo!['email'] ?? ''),
+                  const Icon(Icons.arrow_drop_down),
                 ],
               ),
             ),
             itemBuilder: (context) => [
               PopupMenuItem(
-                child: Text(AppLocalizations.of(context).yourBalance(
-                  _formatBalance(_userInfo!['balance']),
-                )),
+                enabled: false,
+                child: Text(
+                  AppLocalizations.of(context).yourBalance(_balance),
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
               ),
               PopupMenuItem(
-                child: Text(AppLocalizations.of(context).yourCommission(
-                  _formatBalance(_userInfo!['commission_balance']),
-                )),
+                enabled: false,
+                child: Text(
+                  AppLocalizations.of(context).yourCommission(_commission),
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '转换余额:',
+                      style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.grey[400]!),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 120,
+                            child: TextField(
+                              controller: _transferAmountController,
+                              decoration: InputDecoration(
+                                hintText: '单位: 元',
+                                hintStyle: TextStyle(color: Colors.grey[600]),
+                                filled: true,
+                                fillColor: Colors.grey[200],
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              style: TextStyle(
+                                color: Colors.grey[800],
+                                fontSize: 13,
+                              ),
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          Container(
+                            height: 20,
+                            width: 1,
+                            color: Colors.grey[400],
+                          ),
+                          SizedBox(
+                            width: 60,
+                            child: TextButton(
+                              onPressed: _isLoading ? null : _transferBalance,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                foregroundColor: Theme.of(context).primaryColor,
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      '提交',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                onTap: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.remove('jwt_token');
+                  await prefs.remove('user_info');
+                  if (mounted) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const LoginPage()),
+                    );
+                  }
+                },
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.logout,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '退出登录',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -176,64 +425,169 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Card(
-              child: Padding(
+              child: Container(
+                width: 420,
+                height: 460,
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${AppLocalizations.of(context).totalTraffic}: ${_formatBytes(_userInfo!['transfer_enable'])}',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    if (_subscriptionInfo != null) ...[
-                      const SizedBox(height: 16),
+                    if (_subscriptionInfo != null &&
+                        _subscriptionInfo!['plan'] != null) ...[
                       Text(
-                          '${AppLocalizations.of(context).usedUpload}: ${_formatBytes(_subscriptionInfo!['u'])}'),
-                      Text(
-                          '${AppLocalizations.of(context).usedDownload}: ${_formatBytes(_subscriptionInfo!['d'])}'),
-                      if (_subscriptionInfo!['plan'] != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                            '${AppLocalizations.of(context).currentPlan}: ${_subscriptionInfo!['plan']['name']}'),
-                      ],
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      AppLocalizations.of(context).balanceTransfer,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _transferAmountController,
-                            decoration: InputDecoration(
-                              labelText: AppLocalizations.of(context).unitYuan,
-                              border: const OutlineInputBorder(),
+                        '${AppLocalizations.of(context).currentPlan}: ${_subscriptionInfo!['plan']['name']}',
+                        style: Theme.of(context).textTheme.titleLarge,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (_shouldShowWarning())
+                            const Padding(
+                              padding: EdgeInsets.only(right: 4),
+                              child: Text('⚠️', style: TextStyle(fontSize: 14)),
                             ),
-                            keyboardType: TextInputType.number,
+                          Expanded(
+                            child: Text(
+                              _getExpiryText(),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: _getExpiryColor(),
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (_subscriptionInfo != null) ...[
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.arrow_upward,
+                            size: 16,
+                            color: Colors.green[700],
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '${AppLocalizations.of(context).usedUpload}: ${_formatBytes(_subscriptionInfo!['u'])}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.arrow_downward,
+                            size: 16,
+                            color: Colors.blue[700],
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '${AppLocalizations.of(context).usedDownload}: ${_formatBytes(_subscriptionInfo!['d'])}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: _calculateUsagePercentage(),
+                              backgroundColor: Colors.grey[200],
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _getProgressColor(_calculateUsagePercentage()),
+                              ),
+                              minHeight: 8,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${AppLocalizations.of(context).totalTraffic}: ${_formatBytes(_userInfo!['transfer_enable'])}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Colors.grey[600],
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '剩余: ${_getRemainingTraffic()}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Colors.grey[600],
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (_subscriptionInfo != null &&
+                        _subscriptionInfo!['plan'] != null &&
+                        _subscriptionInfo!['plan']['content'] != null) ...[
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Text(
+                        '订阅介绍',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Html(
+                            data: _subscriptionInfo!['plan']['content'],
+                            style: {
+                              'body': Style(
+                                margin: Margins.zero,
+                                padding: HtmlPaddings.zero,
+                                fontSize: FontSize(14),
+                                color: Colors.grey[600],
+                              ),
+                              'font': Style(
+                                color: Colors.grey[600],
+                              ),
+                              'p': Style(
+                                margin: Margins.zero,
+                                padding: HtmlPaddings.zero,
+                              ),
+                              'br': Style(
+                                margin: Margins.zero,
+                                padding: HtmlPaddings.zero,
+                              ),
+                            },
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        ElevatedButton(
-                          onPressed: _isLoading ? null : _transferBalance,
-                          child: _isLoading
-                              ? const CircularProgressIndicator()
-                              : Text(AppLocalizations.of(context).transfer),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
                 ),
               ),

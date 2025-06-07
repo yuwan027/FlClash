@@ -22,6 +22,32 @@ class Request {
         },
       ),
     );
+
+    // 添加请求拦截器
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        commonPrint.log('请求URL: ${options.uri}');
+        commonPrint.log('请求方法: ${options.method}');
+        commonPrint.log('请求头: ${options.headers}');
+        if (options.data != null) {
+          commonPrint.log('请求体: ${options.data}');
+        }
+        return handler.next(options);
+      },
+      onResponse: (response, handler) {
+        commonPrint.log('响应状态码: ${response.statusCode}');
+        commonPrint.log('响应头: ${response.headers}');
+        commonPrint.log('响应体: ${response.data}');
+        return handler.next(response);
+      },
+      onError: (DioException e, handler) {
+        commonPrint.log('请求错误: ${e.message}');
+        commonPrint.log('错误类型: ${e.type}');
+        commonPrint.log('错误响应: ${e.response?.data}');
+        return handler.next(e);
+      },
+    ));
+
     _clashDio = Dio();
     _clashDio.httpClientAdapter = IOHttpClientAdapter(createHttpClient: () {
       final client = HttpClient();
@@ -31,6 +57,39 @@ class Request {
       };
       return client;
     });
+
+    // 为_clashDio也添加相同的拦截器
+    _clashDio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        commonPrint.log('Clash请求URL: ${options.uri}');
+        commonPrint.log('Clash请求方法: ${options.method}');
+        commonPrint.log('Clash请求头: ${options.headers}');
+        if (options.data != null) {
+          commonPrint.log('Clash请求体: ${options.data}');
+        }
+        return handler.next(options);
+      },
+      onResponse: (response, handler) {
+        commonPrint.log('Clash响应状态码: ${response.statusCode}');
+        commonPrint.log('Clash响应头: ${response.headers}');
+        commonPrint.log('Clash响应体: ${response.data}');
+        return handler.next(response);
+      },
+      onError: (DioException e, handler) {
+        commonPrint.log('Clash请求错误: ${e.message}');
+        commonPrint.log('Clash错误类型: ${e.type}');
+        commonPrint.log('Clash错误响应: ${e.response?.data}');
+        return handler.next(e);
+      },
+    ));
+  }
+
+  Future<Response> get(String url, {Options? options}) async {
+    return await _dio.get(url, options: options);
+  }
+
+  Future<Response> post(String url, {dynamic data, Options? options}) async {
+    return await _dio.post(url, data: data, options: options);
   }
 
   Future<Response> getFileResponseForUrl(String url) async {

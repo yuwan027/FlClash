@@ -28,10 +28,9 @@ class AppLocalizations {
   static const AppLocalizationDelegate delegate = AppLocalizationDelegate();
 
   static Future<AppLocalizations> load(Locale locale) {
-    final name =
-        (locale.countryCode?.isEmpty ?? false)
-            ? locale.languageCode
-            : locale.toString();
+    final name = (locale.countryCode?.isEmpty ?? false)
+        ? locale.languageCode
+        : locale.toString();
     final localeName = Intl.canonicalizedLocale(name);
     return initializeMessages(localeName).then((_) {
       Intl.defaultLocale = localeName;
@@ -3055,9 +3054,9 @@ class AppLocalizations {
     return Intl.message('Clear Data', name: 'clearData', desc: '', args: []);
   }
 
-  /// `Text Scaling`
+  /// `Text Scale`
   String get textScale {
-    return Intl.message('Text Scaling', name: 'textScale', desc: '', args: []);
+    return Intl.message('Text Scale', name: 'textScale', desc: '', args: []);
   }
 
   /// `Internet`
@@ -3065,30 +3064,30 @@ class AppLocalizations {
     return Intl.message('Internet', name: 'internet', desc: '', args: []);
   }
 
-  /// `System APP`
+  /// `System App`
   String get systemApp {
-    return Intl.message('System APP', name: 'systemApp', desc: '', args: []);
+    return Intl.message('System App', name: 'systemApp', desc: '', args: []);
   }
 
-  /// `No network APP`
+  /// `No Network App`
   String get noNetworkApp {
     return Intl.message(
-      'No network APP',
+      'No Network App',
       name: 'noNetworkApp',
       desc: '',
       args: [],
     );
   }
 
-  /// `Contact me`
+  /// `Contact Me`
   String get contactMe {
-    return Intl.message('Contact me', name: 'contactMe', desc: '', args: []);
+    return Intl.message('Contact Me', name: 'contactMe', desc: '', args: []);
   }
 
-  /// `Recovery strategy`
+  /// `Recovery Strategy`
   String get recoveryStrategy {
     return Intl.message(
-      'Recovery strategy',
+      'Recovery Strategy',
       name: 'recoveryStrategy',
       desc: '',
       args: [],
@@ -3115,9 +3114,219 @@ class AppLocalizations {
     );
   }
 
-  /// `Logs test`
+  /// `Logs Test`
   String get logsTest {
-    return Intl.message('Logs test', name: 'logsTest', desc: '', args: []);
+    return Intl.message('Logs Test', name: 'logsTest', desc: '', args: []);
+  }
+
+  /// `Sending login request...`
+  String get loginSendingRequest {
+    return Intl.message(
+      'Sending login request...',
+      name: 'loginSendingRequest',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Login successful, getting user info...`
+  String get loginSuccessGettingInfo {
+    return Intl.message(
+      'Login successful, getting user info...',
+      name: 'loginSuccessGettingInfo',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Redirecting...`
+  String get loginRedirecting {
+    return Intl.message(
+      'Redirecting...',
+      name: 'loginRedirecting',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Login failed, please check your credentials`
+  String get loginFailedCheckCredentials {
+    return Intl.message(
+      'Login failed, please check your credentials',
+      name: 'loginFailedCheckCredentials',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Login failed, network issue`
+  String get loginFailedNetwork {
+    return Intl.message(
+      'Login failed, network issue',
+      name: 'loginFailedNetwork',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Failed to get user info`
+  String get loginFailedGetUserInfo {
+    return Intl.message(
+      'Failed to get user info',
+      name: 'loginFailedGetUserInfo',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Failed to get user info, please retry`
+  String get loginFailedGetUserInfoRetry {
+    return Intl.message(
+      'Failed to get user info, please retry',
+      name: 'loginFailedGetUserInfoRetry',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `User info is empty`
+  String get loginFailedEmptyUserInfo {
+    return Intl.message(
+      'User info is empty',
+      name: 'loginFailedEmptyUserInfo',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Failed to get user info: {statusCode}`
+  String loginFailedGetUserInfoStatus(int statusCode) {
+    return Intl.message(
+      'Failed to get user info: $statusCode',
+      name: 'loginFailedGetUserInfoStatus',
+      desc: '',
+      args: [statusCode],
+    );
+  }
+
+  /// `Subscription Info`
+  String get subscriptionInfo {
+    return Intl.message(
+      'Subscription Info',
+      name: 'subscriptionInfo',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Total Traffic`
+  String get totalTraffic {
+    return Intl.message(
+      'Total Traffic',
+      name: 'totalTraffic',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Used Upload`
+  String get usedUpload {
+    return Intl.message('Used Upload', name: 'usedUpload', desc: '', args: []);
+  }
+
+  /// `Used Download`
+  String get usedDownload {
+    return Intl.message(
+      'Used Download',
+      name: 'usedDownload',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Current Plan`
+  String get currentPlan {
+    return Intl.message(
+      'Current Plan',
+      name: 'currentPlan',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Balance Transfer`
+  String get balanceTransfer {
+    return Intl.message(
+      'Balance Transfer',
+      name: 'balanceTransfer',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Unit: Yuan`
+  String get unitYuan {
+    return Intl.message('Unit: Yuan', name: 'unitYuan', desc: '', args: []);
+  }
+
+  /// `Transfer`
+  String get transfer {
+    return Intl.message('Transfer', name: 'transfer', desc: '', args: []);
+  }
+
+  /// `Please enter a valid amount`
+  String get enterValidAmount {
+    return Intl.message(
+      'Please enter a valid amount',
+      name: 'enterValidAmount',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Balance transfer successful`
+  String get transferSuccess {
+    return Intl.message(
+      'Balance transfer successful',
+      name: 'transferSuccess',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Balance transfer failed`
+  String get transferFailed {
+    return Intl.message(
+      'Balance transfer failed',
+      name: 'transferFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Your balance: {balance} CNY`
+  String yourBalance(String balance) {
+    return Intl.message(
+      'Your balance: $balance CNY',
+      name: 'yourBalance',
+      desc: '',
+      args: [balance],
+    );
+  }
+
+  /// `Your commission: {commission} CNY`
+  String yourCommission(String commission) {
+    return Intl.message(
+      'Your commission: $commission CNY',
+      name: 'yourCommission',
+      desc: '',
+      args: [commission],
+    );
+  }
+
+  /// `Zoom`
+  String get zoom {
+    return Intl.message('Zoom', name: 'zoom', desc: '', args: []);
   }
 }
 

@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 import '../config/app_config.dart';
+import '../common/http_client.dart';
+import '../l10n/l10n.dart';
 import 'subscription.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -19,8 +22,12 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _rememberMe = true;
   String _loginStatus = '';
   static const int _timeoutSeconds = 30;
+  String? _cachedEmail;
+  String? _cachedPassword;
+  String? _cachedAvatar;
 
   @override
   void initState() {
@@ -31,6 +38,8 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
       windowManager.setSize(const Size(340, 500));
       windowManager.setResizable(false);
     }
+    _loadCachedCredentials();
+    _loadLoginInfo();
   }
 
   @override
@@ -40,88 +49,154 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
       windowManager.removeListener(this);
       windowManager.setResizable(true);
     }
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
+  Future<void> _loadCachedCredentials() async {
+    if (!mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _cachedEmail = prefs.getString('cached_email');
+      _cachedPassword = prefs.getString('cached_password');
+      _cachedAvatar = prefs.getString('cached_avatar');
+    });
+  }
+
+  Future<void> _clearCredentials() async {
+    if (!mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('cached_email');
+    await prefs.remove('cached_password');
+    await prefs.remove('cached_avatar');
+
+    setState(() {
+      _cachedEmail = null;
+      _cachedPassword = null;
+      _cachedAvatar = null;
+    });
+  }
+
+  Future<void> _quickLogin() async {
+    if (!mounted || _cachedEmail == null || _cachedPassword == null) return;
+
+    _emailController.text = _cachedEmail!;
+    _passwordController.text = _cachedPassword!;
+    await _login();
+  }
+
+  void _handleLogin() {
+    if (!mounted) return;
+
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入邮箱和密码')),
+      );
+      return;
+    }
+    _login();
+  }
+
+  Future<void> _loadLoginInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('cached_email');
+    final password = prefs.getString('cached_password');
+
+    if (email != null && password != null) {
+      setState(() {
+        _emailController.text = email;
+        _passwordController.text = password;
+      });
+    }
+  }
+
+  Future<void> _saveLoginInfo(
+      String email, String password, String avatarUrl) async {
+    if (!_rememberMe) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cached_email', email);
+    await prefs.setString('cached_password', password);
+    await prefs.setString('cached_avatar', avatarUrl);
+  }
+
   Future<void> _login() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入邮箱和密码')),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
-      _loginStatus = '正在发送登录请求...';
     });
 
-    final email = _emailController.text;
-    final password = _passwordController.text;
-
     try {
-      final response = await http
-          .post(
-            Uri.parse('${AppConfig.baseUrl}/api/v1/passport/auth/login'),
-            headers: {
-              'User-Agent': AppConfig.userAgent,
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'email': email,
-              'password': password,
-            }),
-          )
-          .timeout(const Duration(seconds: _timeoutSeconds));
+      final response = await HttpClient.post(
+        Uri.parse('${AppConfig.baseUrl}/api/v1/user/login'),
+        headers: {
+          'User-Agent': AppConfig.userAgent,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'email': _emailController.text,
+          'password': _passwordController.text,
+        }),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['data'] != null && data['data']['auth_data'] != null) {
-          final jwtToken = data['data']['auth_data'];
+        if (data['data'] != null) {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('jwt_token', jwtToken);
-          await prefs.setString('email', email);
+          await prefs.setString('jwt_token', data['data']['token']);
+          await prefs.setString('user_info', jsonEncode(data['data']));
 
-          setState(() {
-            _loginStatus = '登录成功，正在获取用户信息...';
-          });
+          // 保存登录信息到缓存
+          await _saveLoginInfo(
+            _emailController.text,
+            _passwordController.text,
+            data['data']['avatar_url'] ?? '',
+          );
 
-          // 获取用户信息
-          try {
-            await _getUserInfo(jwtToken);
+          // 检查并导入订阅
+          if (data['data']['subscribe_url'] != null) {
+            final subscribeUrl = data['data']['subscribe_url'] as String;
+            final uri = Uri.parse(subscribeUrl);
+            final token = uri.queryParameters['token'];
 
-            if (mounted) {
-              setState(() {
-                _loginStatus = '正在跳转...';
-              });
-
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const SubscriptionPage()),
-              );
+            if (token != null) {
+              final cachedToken = prefs.getString('last_subscribe_token');
+              if (cachedToken != token) {
+                // 新订阅或需要更新
+                await prefs.setString('last_subscribe_token', token);
+                // TODO: 调用订阅导入功能
+                // 这里需要调用其他页面的订阅导入功能
+              }
             }
-          } catch (e) {
-            if (mounted) {
-              setState(() {
-                _loginStatus = '获取用户信息失败';
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('获取用户信息失败，请重试')),
-              );
-            }
+          }
+
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const SubscriptionPage()),
+            );
           }
         }
       } else {
         if (mounted) {
-          setState(() {
-            _loginStatus = '登录失败，请检查账号密码';
-          });
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('登录失败，请检查邮箱和密码')),
+            const SnackBar(content: Text('登录失败，请检查账号密码')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _loginStatus = '登录失败，网络问题';
-        });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('登录超时，请重试')),
+          const SnackBar(content: Text('登录失败，请检查网络连接')),
         );
       }
     } finally {
@@ -133,22 +208,30 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
     }
   }
 
-  Future<void> _getUserInfo(String token) async {
+  Future<void> _getUserInfo(String jwtToken) async {
     try {
-      final response = await http.get(
+      final response = await HttpClient.get(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/info'),
         headers: {
           'User-Agent': AppConfig.userAgent,
-          'Authorization': 'Bearer $token',
+          'Authorization': jwtToken,
         },
       );
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['data'] != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('user_info', jsonEncode(data['data']));
-          await prefs.setString('jwt_token', token);
+          await prefs.setString('jwt_token', jwtToken);
+          // 缓存头像和登录信息，但不立即显示
+          if (data['data']['avatar_url'] != null) {
+            await prefs.setString('cached_avatar', data['data']['avatar_url']);
+            await prefs.setString('cached_email', _emailController.text);
+            await prefs.setString('cached_password', _passwordController.text);
+          }
         } else {
           throw Exception('用户信息为空');
         }
@@ -187,6 +270,7 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
             children: [
               TextField(
                 controller: _emailController,
+                enabled: !_isLoading,
                 decoration: InputDecoration(
                   labelText: '邮箱',
                   prefixIcon: Icon(Icons.email, color: colorScheme.primary),
@@ -194,10 +278,18 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
+                onSubmitted: (_) {
+                  if (_passwordController.text.isNotEmpty) {
+                    _handleLogin();
+                  } else {
+                    FocusScope.of(context).nextFocus();
+                  }
+                },
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: _passwordController,
+                enabled: !_isLoading,
                 decoration: InputDecoration(
                   labelText: '密码',
                   prefixIcon: Icon(Icons.lock, color: colorScheme.primary),
@@ -206,10 +298,17 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
                   ),
                 ),
                 obscureText: true,
+                onSubmitted: (_) {
+                  if (_emailController.text.isNotEmpty) {
+                    _handleLogin();
+                  } else {
+                    FocusScope.of(context).previousFocus();
+                  }
+                },
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: _isLoading ? null : _login,
+                onPressed: _isLoading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,
@@ -222,6 +321,39 @@ class _LoginPageState extends State<LoginPage> with WindowListener {
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text('登录'),
               ),
+              if (_cachedEmail != null) ...[
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_cachedAvatar != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: CircleAvatar(
+                          radius: 12,
+                          backgroundImage: NetworkImage(_cachedAvatar!),
+                        ),
+                      ),
+                    TextButton(
+                      onPressed: _isLoading ? null : _quickLogin,
+                      child: Text(
+                        '使用 $_cachedEmail 登录',
+                        style: TextStyle(
+                          color: colorScheme.primary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 16),
+                      onPressed: _isLoading ? null : _clearCredentials,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      color: Colors.grey,
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 10),
               Text(
                 _loginStatus,

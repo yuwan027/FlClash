@@ -502,7 +502,7 @@ class AppController {
     await _handlerDisclaimer();
     await _initCore();
     await _initStatus();
-    updateTray(true);
+    updateTray();
     autoLaunch?.updateStatus(
       _ref.read(appSettingProvider).autoLaunch,
     );
@@ -880,14 +880,17 @@ class AppController {
     final configJson = globalState.config.toJson();
     return Isolate.run<List<int>>(() async {
       final archive = Archive();
-      archive.add("config.json", configJson);
+      archive.addFile(ArchiveFile(
+          "config.json",
+          utf8.encode(json.encode(configJson)).length,
+          utf8.encode(json.encode(configJson))));
       await archive.addDirectoryToArchive(profilesPath, homeDirPath);
       final zipEncoder = ZipEncoder();
       return zipEncoder.encode(archive) ?? [];
     });
   }
 
-  updateTray([bool focus = false]) async {
+  updateTray() async {
     tray.update(
       trayState: _ref.read(trayStateProvider),
     );

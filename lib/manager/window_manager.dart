@@ -103,7 +103,7 @@ class _WindowContainerState extends ConsumerState<WindowManager>
 
   @override
   Future<void> onTaskbarCreated() async {
-    globalState.appController.updateTray(true);
+    globalState.appController.updateTray();
     super.onTaskbarCreated();
   }
 

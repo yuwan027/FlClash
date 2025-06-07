@@ -1,0 +1,62 @@
+{
+  "appTitle": "FlClash",
+  "subscriptionInfo": "订阅信息",
+  "totalTraffic": "总流量",
+  "usedUpload": "已用上传",
+  "usedDownload": "已用下载",
+  "currentPlan": "当前套餐",
+  "yourBalance": "余额: {balance}",
+  "yourCommission": "佣金: {commission}",
+  "transferBalance": "转换余额",
+  "enterValidAmount": "请输入有效金额",
+  "transferSuccess": "转换成功",
+  "transferFailed": "转换失败",
+  "@appTitle": {
+    "description": "应用程序标题"
+  },
+  "@subscriptionInfo": {
+    "description": "订阅信息页面标题"
+  },
+  "@totalTraffic": {
+    "description": "总流量标签"
+  },
+  "@usedUpload": {
+    "description": "已用上传流量标签"
+  },
+  "@usedDownload": {
+    "description": "已用下载流量标签"
+  },
+  "@currentPlan": {
+    "description": "当前套餐标签"
+  },
+  "@yourBalance": {
+    "description": "余额显示文本",
+    "placeholders": {
+      "balance": {
+        "type": "String",
+        "example": "100.00"
+      }
+    }
+  },
+  "@yourCommission": {
+    "description": "佣金显示文本",
+    "placeholders": {
+      "commission": {
+        "type": "String",
+        "example": "50.00"
+      }
+    }
+  },
+  "@transferBalance": {
+    "description": "转换余额标签"
+  },
+  "@enterValidAmount": {
+    "description": "请输入有效金额提示"
+  },
+  "@transferSuccess": {
+    "description": "转换成功提示"
+  },
+  "@transferFailed": {
+    "description": "转换失败提示"
+  }
+} 
