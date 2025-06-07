@@ -273,6 +273,59 @@ class _OrderPageState extends ConsumerState<OrderPage> {
     }
   }
 
+  Future<void> _cancelOrder(String tradeNo) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jwtToken = prefs.getString('jwt_token');
+      if (jwtToken == null) return;
+
+      final requestBody = {
+        'trade_no': tradeNo,
+      };
+
+      print('[取消订单] 开始取消订单...');
+      print('[取消订单] 请求URL: ${AppConfig.baseUrl}/api/v1/user/order/cancel');
+      print(
+          '[取消订单] 请求头: Authorization: $jwtToken, User-Agent: ${AppConfig.userAgent}');
+      print('[取消订单] 请求体: ${jsonEncode(requestBody)}');
+
+      final response = await HttpClient.post(
+        Uri.parse('${AppConfig.baseUrl}/api/v1/user/order/cancel'),
+        headers: {
+          'Authorization': jwtToken,
+          'User-Agent': AppConfig.userAgent,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      print('[取消订单] 响应状态码: ${response.statusCode}');
+      print('[取消订单] 响应体: ${response.body}');
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('订单已取消')),
+          );
+        }
+        _loadOrders(); // 刷新订单列表
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('取消订单失败: ${response.body}')),
+          );
+        }
+      }
+    } catch (e) {
+      print('[取消订单] 请求异常: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('取消订单失败: $e')),
+        );
+      }
+    }
+  }
+
   void _showPaymentDialog(Order order) async {
     final methods = await _getPaymentMethods();
     if (methods.isEmpty) {
@@ -430,14 +483,30 @@ class _OrderPageState extends ConsumerState<OrderPage> {
                                 ],
                                 if (order.isPending) ...[
                                   const SizedBox(height: 16),
-                                  ElevatedButton(
-                                    onPressed: () => _showPaymentDialog(order),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          Theme.of(context).colorScheme.primary,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    child: const Text('去支付'),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            _showPaymentDialog(order),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          foregroundColor: Colors.white,
+                                          minimumSize: const Size(100, 48),
+                                        ),
+                                        child: const Text('去支付'),
+                                      ),
+                                      const SizedBox(width: 8), // 按钮之间间距
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            _cancelOrder(order.tradeNo),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('取消订单'),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ],

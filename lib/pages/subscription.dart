@@ -21,6 +21,7 @@ import 'traffic_log.dart';
 import 'plan.dart';
 import 'order.dart';
 import 'dart:async';
+import 'invite.dart';
 
 class SubscriptionPage extends ConsumerStatefulWidget {
   const SubscriptionPage({super.key});
@@ -919,6 +920,19 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
                             },
                             icon: const Icon(Icons.receipt_long),
                             label: const Text('订单管理'),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const InvitePage(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.person_add),
+                            label: const Text('邀请返佣'),
                           ),
                         ],
                       ),

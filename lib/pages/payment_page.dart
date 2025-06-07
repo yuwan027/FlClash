@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:webview_windows/webview_windows.dart';
 import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -17,15 +18,16 @@ class PaymentPage extends StatefulWidget {
 }
 
 class _PaymentPageState extends State<PaymentPage> {
-  bool _hasLaunched = false;
+  final _controller = WebviewController();
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _launchPaymentUrl();
+    _initializeWebView();
   }
 
-  Future<void> _launchPaymentUrl() async {
+  Future<void> _initializeWebView() async {
     // 修正支付链接中的多余斜杠（不影响协议头）
     String fixedUrl = widget.paymentUrl.replaceAll(RegExp(r'(?<!:)/{2,}'), '/');
     // 还原协议头的双斜杠
@@ -36,22 +38,50 @@ class _PaymentPageState extends State<PaymentPage> {
       fixedUrl = fixedUrl.replaceFirst('https:/', 'https://');
     }
 
-    if (await canLaunchUrl(Uri.parse(fixedUrl))) {
-      await launchUrl(Uri.parse(fixedUrl),
-          mode: LaunchMode.externalApplication);
-    } else {
+    try {
+      await _controller.initialize();
+      // 提取原始的 return_url
+      Uri initialUri = Uri.parse(fixedUrl);
+      String? originalReturnUrlEncoded =
+          initialUri.queryParameters['return_url'];
+      String? originalReturnUrl;
+      if (originalReturnUrlEncoded != null) {
+        originalReturnUrl = Uri.decodeComponent(originalReturnUrlEncoded);
+      }
+
+      _controller.url.listen((url) {
+        // 只有当当前URL与原始的return_url匹配时才返回
+        if (originalReturnUrl != null && url.startsWith(originalReturnUrl)) {
+          Navigator.pop(context);
+        }
+      });
+
+      _controller.loadingState.listen((state) {
+        setState(() {
+          isLoading = state == LoadingState.loading;
+        });
+      });
+
+      await _controller.loadUrl(fixedUrl);
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法打开支付链接，请检查系统浏览器设置。')),
+          SnackBar(content: Text('WebView 初始化失败: $e')),
         );
+        Navigator.pop(context); // 初始化失败，返回上一页
       }
     }
-    if (mounted) {
-      setState(() {
-        _hasLaunched = true;
-      });
-      Navigator.pop(context);
-    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -64,19 +94,16 @@ class _PaymentPageState extends State<PaymentPage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (!_hasLaunched) ...[
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              const Text('正在打开支付页面...'),
-            ] else ...[
-              const Text('支付页面已尝试打开。如果未跳转，请手动返回。'),
-            ],
-          ],
-        ),
+      body: Stack(
+        children: [
+          Webview(
+            _controller,
+          ),
+          if (isLoading)
+            const Center(
+              child: CircularProgressIndicator(),
+            ),
+        ],
       ),
     );
   }
