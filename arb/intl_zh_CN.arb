@@ -401,5 +401,48 @@
   "recoveryStrategy": "恢复策略",
   "recoveryStrategy_override": "覆盖",
   "recoveryStrategy_compatible": "兼容",
-  "logsTest": "日志测试"
+  "logsTest": "日志测试",
+  "loginSendingRequest": "正在发送登录请求...",
+  "loginSuccessGettingInfo": "登录成功，正在获取用户信息...",
+  "loginRedirecting": "正在跳转...",
+  "loginFailedCheckCredentials": "登录失败，请检查账号密码",
+  "loginFailedNetwork": "登录失败，网络问题",
+  "loginFailedGetUserInfo": "获取用户信息失败",
+  "loginFailedGetUserInfoRetry": "获取用户信息失败，请重试",
+  "loginFailedEmptyUserInfo": "用户信息为空",
+  "loginFailedGetUserInfoStatus": "获取用户信息失败: {statusCode}",
+  "@loginFailedGetUserInfoStatus": {
+    "placeholders": {
+      "statusCode": {
+        "type": "int"
+      }
+    }
+  },
+  "subscriptionInfo": "订阅信息",
+  "totalTraffic": "总流量",
+  "usedUpload": "已用上传",
+  "usedDownload": "已用下载",
+  "currentPlan": "当前套餐",
+  "balanceTransfer": "余额转换",
+  "unitYuan": "单位：元",
+  "transfer": "转换",
+  "enterValidAmount": "请输入有效的金额",
+  "transferSuccess": "余额转换成功",
+  "transferFailed": "余额转换失败",
+  "yourBalance": "您的余额: {balance} CNY",
+  "@yourBalance": {
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "yourCommission": "您的佣金: {commission} CNY",
+  "@yourCommission": {
+    "placeholders": {
+      "commission": {
+        "type": "String"
+      }
+    }
+  }
 }

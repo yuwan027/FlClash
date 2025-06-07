@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
+import '../l10n/l10n.dart';
 
 class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});
@@ -37,15 +38,15 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
   Future<void> _loadSubscriptionInfo() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token == null) return;
+    final jwtToken = prefs.getString('jwt_token');
+    if (jwtToken == null) return;
 
     try {
       final response = await http.get(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/getSubscribe'),
         headers: {
           'User-Agent': AppConfig.userAgent,
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $jwtToken',
         },
       );
 
@@ -82,7 +83,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     final amount = double.tryParse(_transferAmountController.text);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效的金额')),
+        SnackBar(content: Text(AppLocalizations.of(context).enterValidAmount)),
       );
       return;
     }
@@ -93,14 +94,14 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      if (token == null) return;
+      final jwtToken = prefs.getString('jwt_token');
+      if (jwtToken == null) return;
 
       final response = await http.post(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/transfer'),
         headers: {
           'User-Agent': AppConfig.userAgent,
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
@@ -110,18 +111,18 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('余额转换成功')),
+          SnackBar(content: Text(AppLocalizations.of(context).transferSuccess)),
         );
         _transferAmountController.clear();
         await _loadUserInfo();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('余额转换失败')),
+          SnackBar(content: Text(AppLocalizations.of(context).transferFailed)),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('余额转换失败')),
+        SnackBar(content: Text(AppLocalizations.of(context).transferFailed)),
       );
     } finally {
       setState(() {
@@ -138,7 +139,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('订阅信息'),
+        title: Text(AppLocalizations.of(context).subscriptionInfo),
         actions: [
           PopupMenuButton<String>(
             child: Padding(
@@ -156,12 +157,14 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             ),
             itemBuilder: (context) => [
               PopupMenuItem(
-                child:
-                    Text('您的余额: ${_formatBalance(_userInfo!['balance'])} CNY'),
+                child: Text(AppLocalizations.of(context).yourBalance(
+                  _formatBalance(_userInfo!['balance']),
+                )),
               ),
               PopupMenuItem(
-                child: Text(
-                    '您的佣金: ${_formatBalance(_userInfo!['commission_balance'])} CNY'),
+                child: Text(AppLocalizations.of(context).yourCommission(
+                  _formatBalance(_userInfo!['commission_balance']),
+                )),
               ),
             ],
           ),
@@ -179,16 +182,19 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '总流量: ${_formatBytes(_userInfo!['transfer_enable'])}',
+                      '${AppLocalizations.of(context).totalTraffic}: ${_formatBytes(_userInfo!['transfer_enable'])}',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     if (_subscriptionInfo != null) ...[
                       const SizedBox(height: 16),
-                      Text('已用上传: ${_formatBytes(_subscriptionInfo!['u'])}'),
-                      Text('已用下载: ${_formatBytes(_subscriptionInfo!['d'])}'),
+                      Text(
+                          '${AppLocalizations.of(context).usedUpload}: ${_formatBytes(_subscriptionInfo!['u'])}'),
+                      Text(
+                          '${AppLocalizations.of(context).usedDownload}: ${_formatBytes(_subscriptionInfo!['d'])}'),
                       if (_subscriptionInfo!['plan'] != null) ...[
                         const SizedBox(height: 16),
-                        Text('当前套餐: ${_subscriptionInfo!['plan']['name']}'),
+                        Text(
+                            '${AppLocalizations.of(context).currentPlan}: ${_subscriptionInfo!['plan']['name']}'),
                       ],
                     ],
                   ],
@@ -203,7 +209,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '余额转换',
+                      AppLocalizations.of(context).balanceTransfer,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 16),
@@ -212,9 +218,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                         Expanded(
                           child: TextField(
                             controller: _transferAmountController,
-                            decoration: const InputDecoration(
-                              labelText: '单位：元',
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(context).unitYuan,
+                              border: const OutlineInputBorder(),
                             ),
                             keyboardType: TextInputType.number,
                           ),
@@ -224,7 +230,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                           onPressed: _isLoading ? null : _transferBalance,
                           child: _isLoading
                               ? const CircularProgressIndicator()
-                              : const Text('转换'),
+                              : Text(AppLocalizations.of(context).transfer),
                         ),
                       ],
                     ),

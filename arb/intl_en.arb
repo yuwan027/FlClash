@@ -392,13 +392,57 @@
   "messageTestTip": "This is a message.",
   "crashTest": "Crash test",
   "clearData": "Clear Data",
-  "textScale": "Text Scaling",
+  "textScale": "Text Scale",
   "internet": "Internet",
-  "systemApp": "System APP",
-  "noNetworkApp": "No network APP",
-  "contactMe": "Contact me",
-  "recoveryStrategy": "Recovery strategy",
+  "systemApp": "System App",
+  "noNetworkApp": "No Network App",
+  "contactMe": "Contact Me",
+  "recoveryStrategy": "Recovery Strategy",
   "recoveryStrategy_override": "Override",
   "recoveryStrategy_compatible": "Compatible",
-  "logsTest": "Logs test"
+  "logsTest": "Logs Test",
+  "loginSendingRequest": "Sending login request...",
+  "loginSuccessGettingInfo": "Login successful, getting user info...",
+  "loginRedirecting": "Redirecting...",
+  "loginFailedCheckCredentials": "Login failed, please check your credentials",
+  "loginFailedNetwork": "Login failed, network issue",
+  "loginFailedGetUserInfo": "Failed to get user info",
+  "loginFailedGetUserInfoRetry": "Failed to get user info, please retry",
+  "loginFailedEmptyUserInfo": "User info is empty",
+  "loginFailedGetUserInfoStatus": "Failed to get user info: {statusCode}",
+  "@loginFailedGetUserInfoStatus": {
+    "placeholders": {
+      "statusCode": {
+        "type": "int"
+      }
+    }
+  },
+  "subscriptionInfo": "Subscription Info",
+  "totalTraffic": "Total Traffic",
+  "usedUpload": "Used Upload",
+  "usedDownload": "Used Download",
+  "currentPlan": "Current Plan",
+  "balanceTransfer": "Balance Transfer",
+  "unitYuan": "Unit: Yuan",
+  "transfer": "Transfer",
+  "enterValidAmount": "Please enter a valid amount",
+  "transferSuccess": "Balance transfer successful",
+  "transferFailed": "Balance transfer failed",
+  "yourBalance": "Your balance: {balance} CNY",
+  "@yourBalance": {
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "yourCommission": "Your commission: {commission} CNY",
+  "@yourCommission": {
+    "placeholders": {
+      "commission": {
+        "type": "String"
+      }
+    }
+  },
+  "zoom": "Zoom"
 }
