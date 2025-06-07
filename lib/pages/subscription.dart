@@ -120,6 +120,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
         final data = jsonDecode(response.body);
         if (data['data'] != null) {
           print('用户信息数据: ${data['data']}');
+          print('expired_at: ${data['data']['expired_at']}');
           await prefs.setString('user_info', jsonEncode(data['data']));
           if (mounted) {
             setState(() {
@@ -263,12 +264,12 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   }
 
   String _getExpiryText() {
-    if (_userInfo == null || _userInfo!['expired_at'] == null) {
+    if (_subscriptionInfo == null || _subscriptionInfo!['expired_at'] == null) {
       return '该订阅永不到期';
     }
 
     final expiredAt = DateTime.fromMillisecondsSinceEpoch(
-      _userInfo!['expired_at'] * 1000,
+      _subscriptionInfo!['expired_at'] * 1000,
     );
     final now = DateTime.now();
     final difference = expiredAt.difference(now).inDays;
@@ -280,12 +281,12 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   }
 
   Color _getExpiryColor() {
-    if (_userInfo == null || _userInfo!['expired_at'] == null) {
+    if (_subscriptionInfo == null || _subscriptionInfo!['expired_at'] == null) {
       return Colors.grey[600]!;
     }
 
     final expiredAt = DateTime.fromMillisecondsSinceEpoch(
-      _userInfo!['expired_at'] * 1000,
+      _subscriptionInfo!['expired_at'] * 1000,
     );
     final now = DateTime.now();
     final difference = expiredAt.difference(now).inDays;
@@ -297,12 +298,12 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   }
 
   bool _shouldShowWarning() {
-    if (_userInfo == null || _userInfo!['expired_at'] == null) {
+    if (_subscriptionInfo == null || _subscriptionInfo!['expired_at'] == null) {
       return false;
     }
 
     final expiredAt = DateTime.fromMillisecondsSinceEpoch(
-      _userInfo!['expired_at'] * 1000,
+      _subscriptionInfo!['expired_at'] * 1000,
     );
     final now = DateTime.now();
     final difference = expiredAt.difference(now).inDays;
@@ -611,7 +612,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
                             // 左侧套餐信息
                             Expanded(
                               child: Container(
-                                height: 540,
+                                height: 430,
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).colorScheme.surface,
