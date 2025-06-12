@@ -45,6 +45,10 @@ dependencies:
     git:
       url: https://github.com/chen08209/re-editor.git
       ref: main
+  re_editor:
+    git:
+      url: https://github.com/chen08209/re-editor.git
+      ref: main
   re_highlight: ^0.0.3
   archive: ^3.6.1
   lpinyin: ^2.0.3
