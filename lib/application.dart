@@ -14,6 +14,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'controller.dart';
+import 'pages/login.dart';
+import 'pages/home.dart'; 
 import 'pages/pages.dart';
 
 class Application extends ConsumerStatefulWidget {
@@ -179,10 +181,15 @@ class ApplicationState extends ConsumerState<Application> {
                   primaryColor: themeProps.primaryColor,
                 ).toPureBlack(themeProps.pureBlack),
               ),
-              home: child,
+              // 用 routes 和 initialRoute 替代 home
+              routes: {
+                '/login': (context) => const LoginPage(),
+                '/home': (context) => const HomePage(),
+              },
+              initialRoute: '/login',
             );
           },
-          child: const HomePage(),
+          child: const LoginPage(),
         ),
       ),
     );

@@ -17,6 +17,7 @@ import 'clash/core.dart';
 import 'clash/lib.dart';
 import 'common/common.dart';
 import 'models/models.dart';
+import 'pages/login.dart';
 
 Future<void> main() async {
   globalState.isService = false;
@@ -27,8 +28,8 @@ Future<void> main() async {
   await android?.init();
   await window?.init(version);
   HttpOverrides.global = FlClashHttpOverrides();
-  runApp(ProviderScope(
-    child: const Application(),
+  runApp(const ProviderScope(
+    child: MyApp(),
   ));
 }
 
@@ -152,5 +153,14 @@ class _VpnListenerWithService with VpnListener {
   void onDnsChanged(String dns) {
     super.onDnsChanged(dns);
     _onDnsChanged(dns);
+  }
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Application();
   }
 }
