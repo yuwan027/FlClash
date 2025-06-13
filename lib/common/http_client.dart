@@ -4,7 +4,7 @@ import 'dart:io';
 import '../config/app_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// JWT token 管理的 Riverpod Provider，初始为 null（未登录或无token）
+// 这里用 String?，为空时代表没登录或无auth_data
 final jwtTokenProvider = StateProvider<String?>((ref) => null);
 
 typedef OnUnauthorizedCallback = void Function();
@@ -12,10 +12,10 @@ typedef OnUnauthorizedCallback = void Function();
 class HttpClientHelper {
   final HttpClient _httpClient = HttpClient();
 
-  /// 通过回调异步获取当前有效的 JWT token（可能为 null）
+  /// 获取当前有效 JWT 的异步方法
   final Future<String?> Function() getToken;
 
-  /// 当收到 401 Unauthorized 时触发回调，一般用来跳转登录页
+  /// 遇到401时调用，进行登录跳转等操作
   final OnUnauthorizedCallback onUnauthorized;
 
   HttpClientHelper({
@@ -23,12 +23,51 @@ class HttpClientHelper {
     required this.onUnauthorized,
   });
 
-  /// 发送 POST 请求，body 是 json 格式，自动添加 token（如果有且匹配 baseUrl）
-  Future<Map<String, dynamic>> postJson(
-    Uri url,
-    Map<String, dynamic> jsonBody, {
+  Future<Map<String, dynamic>> getJson(
+    Uri url, {
     Map<String, String>? headers,
   }) async {
+    print('[HTTP] GET $url');
+
+    final request = await _httpClient.getUrl(url);
+
+    if (url.toString().startsWith(AppConfig.baseUrl)) {
+      request.headers.set(HttpHeaders.userAgentHeader, AppConfig.userAgent);
+
+      final authData = await getToken();
+      if (authData != null && authData.isNotEmpty) {
+        // 直接使用 auth_data，不添加 Bearer 前缀
+        request.headers.set(HttpHeaders.authorizationHeader, authData);
+      }
+    }
+
+    headers?.forEach((key, value) {
+      request.headers.set(key, value);
+    });
+
+    final response = await request.close();
+
+    final responseBody = await response.transform(utf8.decoder).join();
+
+    print('[HTTP] Response status: ${response.statusCode}');
+    print('[HTTP] Response body: $responseBody');
+
+    if (response.statusCode == 200) {
+      try {
+        return jsonDecode(responseBody);
+      } catch (e) {
+        throw Exception('响应JSON解析失败: $e');
+      }
+    } else if (response.statusCode == 401) {
+      onUnauthorized();
+      throw Exception('未授权（401），请重新登录');
+    } else {
+      throw Exception('HTTP请求失败，状态码: ${response.statusCode}');
+    }
+  }
+
+  Future<Map<String, dynamic>> postJson(Uri url, Map<String, dynamic> jsonBody,
+      {Map<String, String>? headers}) async {
     print('[HTTP] POST $url');
     print('[HTTP] Request body: ${jsonEncode(jsonBody)}');
 
@@ -37,22 +76,19 @@ class HttpClientHelper {
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
 
     if (url.toString().startsWith(AppConfig.baseUrl)) {
-      // 添加自定义 User-Agent
       request.headers.set(HttpHeaders.userAgentHeader, AppConfig.userAgent);
 
-      // 自动添加 token 头（无 Bearer 前缀）
-      final token = await getToken();
-      if (token != null && token.isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, token);
+      final authData = await getToken();
+      if (authData != null && authData.isNotEmpty) {
+        // 直接使用 auth_data，不添加 Bearer 前缀
+        request.headers.set(HttpHeaders.authorizationHeader, authData);
       }
     }
 
-    // 合并用户传入的额外 headers，覆盖前面设置的相同 key
     headers?.forEach((key, value) {
       request.headers.set(key, value);
     });
 
-    // 发送请求体
     request.add(utf8.encode(jsonEncode(jsonBody)));
 
     final response = await request.close();
@@ -69,7 +105,6 @@ class HttpClientHelper {
         throw Exception('响应JSON解析失败: $e');
       }
     } else if (response.statusCode == 401) {
-      // Token 过期或未授权，执行回调
       onUnauthorized();
       throw Exception('未授权（401），请重新登录');
     } else {
@@ -77,7 +112,6 @@ class HttpClientHelper {
     }
   }
 
-  /// 关闭底层 HttpClient
   void close() {
     _httpClient.close(force: true);
   }

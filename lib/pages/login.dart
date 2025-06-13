@@ -85,11 +85,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       );
 
       if (responseData['data'] != null &&
-          responseData['data']['token'] != null) {
-        final token = responseData['data']['token'] as String;
+          responseData['data']['auth_data'] != null) {
+        final authData = responseData['data']['auth_data'] as String;
 
-        // 更新全局token状态
-        ref.read(jwtTokenProvider.notifier).state = token;
+        // 更新全局auth_data状态
+        ref.read(jwtTokenProvider.notifier).state = authData;
 
         // 缓存邮箱和密码
         await _saveCachedCredentials(
