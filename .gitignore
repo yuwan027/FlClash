@@ -59,9 +59,8 @@ FlClash.code-workspace
 
 #pubspec.lock
 pubspec.lock
-
-# macos
-/macos/
+# ios
+/ios/
 
 # config
 /lib/config/app_config.dart
