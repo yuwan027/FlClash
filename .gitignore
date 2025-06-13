@@ -62,3 +62,6 @@ pubspec.lock
 
 # macos
 /macos/
+
+# config
+/lib/config/app_config.dart
