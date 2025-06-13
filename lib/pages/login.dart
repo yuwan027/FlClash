@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../common/http_client.dart';
 import '../config/app_config.dart';
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  final HttpClientHelper _httpHelper = HttpClientHelper();
+  late final HttpClientHelper _httpHelper;
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -27,7 +28,22 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    _loadCachedCredentials(); // 只加载缓存，不预填充输入框
+
+    _httpHelper = HttpClientHelper(
+      getToken: () async {
+        return ref.read(jwtTokenProvider);
+      },
+      onUnauthorized: () {
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
+      },
+    );
+
+    _loadCachedCredentials();
+
+    // 启动时清空 token，确保初始状态
+    ref.read(jwtTokenProvider.notifier).state = null;
   }
 
   @override
@@ -44,6 +60,12 @@ class _LoginPageState extends State<LoginPage> {
       _cachedEmail = prefs.getString('cached_email');
       _cachedPassword = prefs.getString('cached_password');
     });
+  }
+
+  Future<void> _saveCachedCredentials(String email, String password) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cached_email', email);
+    await prefs.setString('cached_password', password);
   }
 
   Future<void> _login() async {
@@ -66,15 +88,21 @@ class _LoginPageState extends State<LoginPage> {
           responseData['data']['token'] != null) {
         final token = responseData['data']['token'] as String;
 
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('jwt_token', token);
+        // 更新全局token状态
+        ref.read(jwtTokenProvider.notifier).state = token;
 
-        // **保存邮箱和密码缓存**
-        await prefs.setString('cached_email', _emailController.text);
-        await prefs.setString('cached_password', _passwordController.text);
+        // 缓存邮箱和密码
+        await _saveCachedCredentials(
+          _emailController.text,
+          _passwordController.text,
+        );
+
+        setState(() {
+          _cachedEmail = _emailController.text;
+          _cachedPassword = _passwordController.text;
+        });
 
         if (mounted) {
-          // 登录成功，跳转到首页
           Navigator.pushReplacementNamed(context, '/home');
         }
       } else {
@@ -105,6 +133,9 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  bool get _canSubmit =>
+      _emailController.text.isNotEmpty && _passwordController.text.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -129,11 +160,13 @@ class _LoginPageState extends State<LoginPage> {
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
                   validator: (value) {
                     if (value == null || value.isEmpty) return '请输入邮箱';
                     if (!value.contains('@')) return '请输入有效的邮箱地址';
                     return null;
                   },
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -156,10 +189,17 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.done,
                   validator: (value) {
                     if (value == null || value.isEmpty) return '请输入密码';
                     if (value.length < 6) return '密码长度不能少于6位';
                     return null;
+                  },
+                  onChanged: (_) => setState(() {}),
+                  onFieldSubmitted: (_) {
+                    if (_canSubmit && !_isLoading) {
+                      _login();
+                    }
                   },
                 ),
                 const SizedBox(height: 24),
@@ -176,13 +216,16 @@ class _LoginPageState extends State<LoginPage> {
                       : const Text('登录'),
                 ),
                 if (_cachedEmail != null)
-                  TextButton(
-                    onPressed: _isLoading ? null : _quickLogin,
-                    child: Text(
-                      '使用 $_cachedEmail 登录',
-                      style: TextStyle(
-                        color: colorScheme.primary,
-                        fontSize: 12,
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _quickLogin,
+                      child: Text(
+                        '以 $_cachedEmail 身份登录',
+                        style: TextStyle(
+                          color: colorScheme.primary,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ),

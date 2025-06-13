@@ -70,6 +70,7 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
       initialPage: _pageIndex,
       keepPage: true,
     );
+
     ref.listenManual(currentPageLabelProvider, (prev, next) {
       if (prev != next) {
         _toPage(next);
