@@ -483,32 +483,54 @@ if (currentProfile == null) {
   print('开始更新订阅配置（新配置）');
   await _updateProfileWithRetry(currentProfile);
 } else {
-  // 已有配置，检查上次更新时间并询问是否更新
+  // 已有配置，检查上次更新时间
   final lastUpdate = currentProfile.lastUpdateDate;
-  String timeMessage = '检测到已存在相同订阅配置';
+  bool shouldAutoUpdate = false;
   
   if (lastUpdate != null) {
     final now = DateTime.now();
     final difference = now.difference(lastUpdate);
-    timeMessage = '距离上次更新已过: ${_formatTimeDifference(difference)}';
+    final hoursSinceUpdate = difference.inHours;
+    
+    print('距离上次更新已过: ${_formatTimeDifference(difference)}');
+    
+    // 超过3小时自动更新
+    if (hoursSinceUpdate >= 3) {
+      shouldAutoUpdate = true;
+      print('超过3小时未更新，自动更新订阅');
+    }
+  } else {
+    // 没有更新记录，自动更新
+    shouldAutoUpdate = true;
+    print('没有更新记录，自动更新订阅');
   }
   
-  final shouldUpdate = await globalState.showMessage(
-    title: appLocalizations.tip,
-    message: TextSpan(
-      text: '$timeMessage，是否更新？',
-    ),
-    confirmText: '是',
-    cancelable: true,
-  );
+  if (shouldAutoUpdate) {
+    // 直接更新，不询问用户
+    await _updateProfileWithRetry(currentProfile);
+  } else {
+    // 不到3小时，询问用户是否更新
+    final now = DateTime.now();
+    final difference = now.difference(lastUpdate!);
+    final timeMessage = '距离上次更新已过: ${_formatTimeDifference(difference)}';
+    
+    final shouldUpdate = await globalState.showMessage(
+      title: appLocalizations.tip,
+      message: TextSpan(
+        text: '$timeMessage，是否更新？',
+      ),
+      confirmText: '是',
+      cancelable: true,
+    );
 
-if (shouldUpdate == true) {
-  await _updateProfileWithRetry(currentProfile);  // 重新拉取更新
-} else {
-  print('用户取消更新，使用当前配置');
-  await globalState.appController.initCore();
- // 即使不更新也刷新，让代理按钮显示出来
-}
+    if (shouldUpdate == true) {
+      await _updateProfileWithRetry(currentProfile);
+    } else {
+      print('用户取消更新，使用当前配置');
+      await globalState.appController.initCore();
+      // 即使不更新也刷新，让代理按钮显示出来
+    }
+  }
 }
 
 
