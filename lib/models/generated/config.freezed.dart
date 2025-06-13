@@ -981,7 +981,7 @@ class __$$WindowPropsImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$WindowPropsImpl implements _WindowProps {
   const _$WindowPropsImpl(
-      {this.width = 750, this.height = 600, this.top, this.left});
+      {this.width = 1000, this.height = 700, this.top, this.left});
 
   factory _$WindowPropsImpl.fromJson(Map<String, dynamic> json) =>
       _$$WindowPropsImplFromJson(json);

@@ -41,13 +41,14 @@ final defaultThemeProps = ThemeProps(
 );
 
 const List<DashboardWidget> defaultDashboardWidgets = [
+  DashboardWidget.subscriptionInfo,
   DashboardWidget.outboundMode,
   DashboardWidget.systemProxyButton,
-  DashboardWidget.tunButton,
   DashboardWidget.networkDetection,
+  DashboardWidget.tunButton,
+  DashboardWidget.intranetIp,
   DashboardWidget.networkSpeed,
 //  DashboardWidget.trafficUsage,
-//  DashboardWidget.intranetIp,
 ];
 
 List<DashboardWidget> dashboardWidgetsSafeFormJson(
@@ -123,8 +124,8 @@ extension AccessControlExt on AccessControl {
 @freezed
 class WindowProps with _$WindowProps {
   const factory WindowProps({
-    @Default(750) double width,
-    @Default(600) double height,
+    @Default(1000) double width,
+    @Default(700) double height,
     double? top,
     double? left,
   }) = _WindowProps;

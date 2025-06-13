@@ -2,11 +2,13 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/common/http_client.dart';
+import 'package:fl_clash/common/http_client.dart' hide jwtTokenProvider;
 import 'package:fl_clash/config/app_config.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
+import 'package:fl_clash/providers/config.dart';
+import 'package:fl_clash/providers/auth_provider.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
@@ -40,6 +42,42 @@ class HomePage extends StatelessWidget {
             viewMode: viewMode,
             navigationItems: navigationItems,
             currentIndex: currentIndex,
+            onClearCache: () async {
+              try {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.clear();
+                
+                // 恢复页面布局和应用设置至默认
+                ref.read(appSettingProvider.notifier).updateState(
+                  (state) => state.copyWith(
+                    showLabel: false, // 恢复showLabel至默认值
+                    isAnimateToPage: true, // 恢复页面动画至默认值
+                    openLogs: false, // 恢复日志显示至默认值
+                    dashboardWidgets: defaultDashboardWidgets, // 重置仪表板小部件至默认
+                    // 可以添加其他需要重置的布局相关设置
+                  ),
+                );
+                
+                // 重置当前页面至默认页面
+                ref.read(currentPageLabelProvider.notifier).state = PageLabel.dashboard;
+                
+                // 显示成功提示
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('缓存已清除，页面布局已恢复默认'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                // 显示错误提示
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('清除缓存失败：$e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
           );
           final bottomNavigationBar =
               viewMode == ViewMode.mobile ? navigationBar : null;
@@ -53,6 +91,26 @@ class HomePage extends StatelessWidget {
             sideNavigationBar: sideNavigationBar,
             body: child!,
             bottomNavigationBar: bottomNavigationBar,
+            actions: [
+              // 编辑布局按钮（只在dashboard页面显示）
+              Consumer(
+                builder: (context, ref, child) {
+                  final pageLabel = ref.watch(currentPageLabelProvider);
+                  if (pageLabel != PageLabel.dashboard) return const SizedBox.shrink();
+                  
+                  return IconButton(
+                    onPressed: () {
+                      ref.read(appSettingProvider.notifier).updateState(
+                            (state) => state.copyWith(
+                              showLabel: !state.showLabel,
+                            ),
+                          );
+                    },
+                    icon: const Icon(Icons.edit),
+                  );
+                },
+              ),
+            ],
           );
         },
         child: _HomePageView(),
@@ -99,10 +157,9 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
         if (lastUpdate != null) {
           final now = DateTime.now();
           final difference = now.difference(lastUpdate);
-          final days = difference.inDays;
           
           print('上次更新时间: $lastUpdate');
-          print('距离上次更新已过: $days 天');
+          print('距离上次更新已过: ${_formatTimeDifference(difference)}');
           
           // 询问用户是否更新
           if (!mounted) return;
@@ -214,8 +271,14 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
       },
     );
 
-    // 使用 Future.microtask 延迟加载数据
-    Future.microtask(() => loadInitialData());
+    // 检查是否有token，如果有且未加载过数据，则加载
+    Future.microtask(() async {
+      final token = ref.read(jwtTokenProvider);
+      final hasLoadedData = ref.read(dataLoadedProvider);
+      if (token != null && !hasLoadedData) {
+        await loadInitialData();
+      }
+    });
 
     // 检查是否需要更新订阅链接
     if (_subscriptionUrl != null) {
@@ -232,6 +295,24 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
         _updatePageController();
       }
     });
+  }
+
+  String _formatTimeDifference(Duration difference) {
+    final days = difference.inDays;
+    final hours = difference.inHours;
+    final minutes = difference.inMinutes;
+    final seconds = difference.inSeconds;
+    
+    // 优先显示最大的时间单位，只要大于等于1就显示
+    if (days >= 1) {
+      return '$days天';
+    } else if (hours >= 1) {
+      return '$hours小时';
+    } else if (minutes >= 1) {
+      return '$minutes分钟';
+    } else {
+      return '$seconds秒';
+    }
   }
 
   String _formatBytes(int bytes) {
@@ -327,6 +408,13 @@ String? _cachedSubscriptionUrl;
 
   Future<void> loadInitialData() async {
     if (!mounted) return;
+    
+    // 如果已经加载过数据，则不重复加载
+    final hasLoadedData = ref.read(dataLoadedProvider);
+    if (hasLoadedData) {
+      print('数据已加载过，跳过重复加载');
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -341,6 +429,9 @@ String? _cachedSubscriptionUrl;
       if (userInfoResponse?['data'] != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_info', jsonEncode(userInfoResponse['data']));
+        
+        // 更新用户信息到provider
+        ref.read(userInfoProvider.notifier).state = userInfoResponse['data'];
         
         if (mounted) {
           setState(() {
@@ -392,11 +483,20 @@ if (currentProfile == null) {
   print('开始更新订阅配置（新配置）');
   await _updateProfileWithRetry(currentProfile);
 } else {
-  // 已有配置，弹窗询问是否更新
+  // 已有配置，检查上次更新时间并询问是否更新
+  final lastUpdate = currentProfile.lastUpdateDate;
+  String timeMessage = '检测到已存在相同订阅配置';
+  
+  if (lastUpdate != null) {
+    final now = DateTime.now();
+    final difference = now.difference(lastUpdate);
+    timeMessage = '距离上次更新已过: ${_formatTimeDifference(difference)}';
+  }
+  
   final shouldUpdate = await globalState.showMessage(
     title: appLocalizations.tip,
     message: TextSpan(
-      text: '检测到已存在相同订阅配置，是否更新？',
+      text: '$timeMessage，是否更新？',
     ),
     confirmText: '是',
     cancelable: true,
@@ -425,7 +525,11 @@ if (shouldUpdate == true) {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
+        // 标记数据已加载，防止重复调用
+        ref.read(dataLoadedProvider.notifier).state = true;
       }
     }
   }
@@ -536,27 +640,36 @@ if (shouldUpdate == true) {
       },
     );
   }
+
 }
 
-class CommonNavigationBar extends ConsumerWidget {
+class CommonNavigationBar extends ConsumerStatefulWidget {
   final ViewMode viewMode;
   final List<NavigationItem> navigationItems;
   final int currentIndex;
+  final VoidCallback? onClearCache;
 
   const CommonNavigationBar({
     super.key,
     required this.viewMode,
     required this.navigationItems,
     required this.currentIndex,
+    this.onClearCache,
   });
 
   @override
-  Widget build(BuildContext context, ref) {
-    if (viewMode == ViewMode.mobile) {
+  ConsumerState<CommonNavigationBar> createState() => _CommonNavigationBarState();
+}
+
+class _CommonNavigationBarState extends ConsumerState<CommonNavigationBar> {
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.viewMode == ViewMode.mobile) {
       return NavigationBarTheme(
         data: _NavigationBarDefaultsM3(context),
         child: NavigationBar(
-          destinations: navigationItems
+          destinations: widget.navigationItems
               .map(
                 (e) => NavigationDestination(
                   icon: e.icon,
@@ -565,13 +678,15 @@ class CommonNavigationBar extends ConsumerWidget {
               )
               .toList(),
           onDestinationSelected: (index) {
-            globalState.appController.toPage(navigationItems[index].label);
+            globalState.appController.toPage(widget.navigationItems[index].label);
           },
-          selectedIndex: currentIndex,
+          selectedIndex: widget.currentIndex,
         ),
       );
     }
+    
     final showLabel = ref.watch(appSettingProvider).showLabel;
+    
     return Material(
       color: context.colorScheme.surfaceContainer,
       child: Column(
@@ -597,7 +712,7 @@ class CommonNavigationBar extends ConsumerWidget {
                         context.textTheme.labelLarge!.copyWith(
                       color: context.colorScheme.onSurface,
                     ),
-                    destinations: navigationItems
+                    destinations: widget.navigationItems
                         .map(
                           (e) => NavigationRailDestination(
                             icon: e.icon,
@@ -609,10 +724,10 @@ class CommonNavigationBar extends ConsumerWidget {
                         .toList(),
                     onDestinationSelected: (index) {
                       globalState.appController
-                          .toPage(navigationItems[index].label);
+                          .toPage(widget.navigationItems[index].label);
                     },
                     extended: false,
-                    selectedIndex: currentIndex,
+                    selectedIndex: widget.currentIndex,
                     labelType: showLabel
                         ? NavigationRailLabelType.all
                         : NavigationRailLabelType.none,
@@ -621,22 +736,122 @@ class CommonNavigationBar extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(
-            height: 16,
-          ),
-          IconButton(
-            onPressed: () {
-              ref.read(appSettingProvider.notifier).updateState(
-                    (state) => state.copyWith(
-                      showLabel: !state.showLabel,
+          const SizedBox(height: 16),
+          // 用户头像下拉菜单
+          Consumer(
+            builder: (context, ref, child) {
+              final userInfo = ref.watch(userInfoProvider);
+              if (userInfo == null) {
+                return const SizedBox.shrink(); // 没有用户信息时不显示
+              }
+              
+              return PopupMenuButton<String>(
+                position: PopupMenuPosition.over,
+                offset: const Offset(0, -8),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Colors.grey[300],
+                    backgroundImage: userInfo['avatar_url'] != null && 
+                                    userInfo['avatar_url'].toString().isNotEmpty
+                        ? NetworkImage(
+                            userInfo['avatar_url'],
+                            // 强制使用缓存，避免重复网络请求
+                          )
+                        : null,
+                    onBackgroundImageError: userInfo['avatar_url'] != null 
+                        ? (exception, stackTrace) {
+                            print('头像加载失败: $exception');
+                          }
+                        : null,
+                    child: userInfo['avatar_url'] == null || 
+                           userInfo['avatar_url'].toString().isEmpty
+                        ? const Icon(Icons.person, color: Colors.white)
+                        : null,
+                  ),
+                ),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    enabled: false,
+                    child: Text(
+                      '余额: ${(userInfo['balance'] / 100).toStringAsFixed(2)} 元',
+                      style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
                     ),
-                  );
+                  ),
+                  PopupMenuItem(
+                    enabled: false,
+                    child: Text(
+                      '佣金: ${(userInfo['commission_balance'] / 100).toStringAsFixed(2)} 元',
+                      style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    enabled: false,
+                    child: _UserBalanceTransferWidget(),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    onTap: () async {
+                      Future.microtask(() async {
+                        try {
+                          final prefs = await SharedPreferences.getInstance();
+                          // 只清理JWT token，保留邮箱、密码和头像URL缓存
+                          await prefs.remove('jwt_token');
+                          
+                          // 清理provider状态
+                          ref.read(jwtTokenProvider.notifier).state = null;
+                          ref.read(dataLoadedProvider.notifier).state = false;
+                          
+                          if (mounted) {
+                            Navigator.pushReplacementNamed(context, '/login');
+                          }
+                        } catch (e) {
+                          print('退出登录失败: $e');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('退出登录失败：$e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      });
+                    },
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.logout,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '退出登录',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
             },
-            icon: const Icon(Icons.menu),
           ),
-          const SizedBox(
-            height: 16,
+          const SizedBox(height: 8),
+          IconButton(
+            onPressed: widget.onClearCache,
+            icon: const Icon(Icons.clear_all),
+            tooltip: '清除缓存',
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -696,6 +911,154 @@ class _NavigationBarDefaultsM3 extends NavigationBarThemeData {
                   ? _colors.onSurface
                   : _colors.onSurfaceVariant);
     });
+  }
+}
+
+// 用户余额转换组件
+class _UserBalanceTransferWidget extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_UserBalanceTransferWidget> createState() => _UserBalanceTransferWidgetState();
+}
+
+class _UserBalanceTransferWidgetState extends ConsumerState<_UserBalanceTransferWidget> {
+  final _transferAmountController = TextEditingController();
+  bool _isLoading = false;
+  late HttpClientHelper _httpHelper;
+
+  @override
+  void initState() {
+    super.initState();
+    _httpHelper = HttpClientHelper(
+      getToken: () async {
+        return ref.read(jwtTokenProvider);
+      },
+      onUnauthorized: () {
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _transferAmountController.dispose();
+    _httpHelper.close();
+    super.dispose();
+  }
+
+  Future<void> _transferBalance() async {
+    final amount = double.tryParse(_transferAmountController.text);
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入有效金额')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 调用API，如果HTTP状态码为200，postJson会正常返回，否则会抛出异常
+      await _httpHelper.postJson(
+        Uri.parse('${AppConfig.baseUrl}/api/v1/user/transfer'),
+        {
+          'transfer_amount': (amount * 100).toInt(),
+        },
+      );
+
+      // 能执行到这里说明HTTP状态码为200，转换成功
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('转换成功')),
+      );
+      _transferAmountController.clear();
+
+      // 重新加载用户信息
+      await _loadUserInfo();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('转换失败：$e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadUserInfo() async {
+    try {
+      final userInfoResponse = await _httpHelper.getJson(
+        Uri.parse('${AppConfig.baseUrl}/api/v1/user/info'),
+      );
+
+      if (userInfoResponse?['data'] != null) {
+        ref.read(userInfoProvider.notifier).state = userInfoResponse['data'];
+      }
+    } catch (e) {
+      print('加载用户信息失败: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '转换余额:',
+          style: TextStyle(
+            color: Theme.of(context).textTheme.bodyLarge?.color,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _transferAmountController,
+                decoration: const InputDecoration(
+                  hintText: '输入转换金额(元)',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.number,
+                enabled: !_isLoading,
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _transferBalance,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                minimumSize: const Size(80, 36),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text('转换'),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 

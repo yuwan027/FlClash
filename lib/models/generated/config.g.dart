@@ -71,6 +71,7 @@ const _$DashboardWidgetEnumMap = {
   DashboardWidget.vpnButton: 'vpnButton',
   DashboardWidget.systemProxyButton: 'systemProxyButton',
   DashboardWidget.intranetIp: 'intranetIp',
+  DashboardWidget.subscriptionInfo: 'subscriptionInfo',
   DashboardWidget.memoryInfo: 'memoryInfo',
 };
 
@@ -117,8 +118,8 @@ const _$AccessSortTypeEnumMap = {
 
 _$WindowPropsImpl _$$WindowPropsImplFromJson(Map<String, dynamic> json) =>
     _$WindowPropsImpl(
-      width: (json['width'] as num?)?.toDouble() ?? 750,
-      height: (json['height'] as num?)?.toDouble() ?? 600,
+      width: (json['width'] as num?)?.toDouble() ?? 1000,
+      height: (json['height'] as num?)?.toDouble() ?? 700,
       top: (json['top'] as num?)?.toDouble(),
       left: (json['left'] as num?)?.toDouble(),
     );

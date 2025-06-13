@@ -382,6 +382,12 @@ enum DashboardWidget {
       child: IntranetIP(),
     ),
   ),
+  subscriptionInfo(
+    GridItem(
+      crossAxisCellCount: 8,
+      child: SubscriptionInfo(),
+    ),
+  ),
   memoryInfo(
     GridItem(
       crossAxisCellCount: 4,
