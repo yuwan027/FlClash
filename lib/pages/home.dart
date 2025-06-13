@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:collection/collection.dart';
 import 'package:fl_clash/views/profiles/add_profile.dart';
+import 'traffic_log_page.dart';
 
 typedef OnSelected = void Function(int index);
 
@@ -866,6 +867,20 @@ class _CommonNavigationBarState extends ConsumerState<CommonNavigationBar> {
                 ],
               );
             },
+          ),
+          const SizedBox(height: 8),
+          // 流量趋势按钮
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TrafficLogPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.trending_up),
+            tooltip: '流量趋势',
           ),
           const SizedBox(height: 8),
           IconButton(

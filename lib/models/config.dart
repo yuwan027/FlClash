@@ -45,8 +45,8 @@ const List<DashboardWidget> defaultDashboardWidgets = [
   DashboardWidget.outboundMode,
   DashboardWidget.systemProxyButton,
   DashboardWidget.networkDetection,
-  DashboardWidget.tunButton,
   DashboardWidget.intranetIp,
+  DashboardWidget.tunButton,
   DashboardWidget.networkSpeed,
 //  DashboardWidget.trafficUsage,
 ];
