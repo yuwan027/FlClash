@@ -24,7 +24,7 @@ class ProfilesView extends StatefulWidget {
 class _ProfilesViewState extends State<ProfilesView> with PageMixin {
   Function? applyConfigDebounce;
 
-  _handleShowAddExtendPage() {
+  _handleShowAddExtendPage({String? importUrl}) {
     showExtend(
       globalState.navigatorKey.currentState!.context,
       builder: (_, type) {
@@ -32,6 +32,7 @@ class _ProfilesViewState extends State<ProfilesView> with PageMixin {
           type: type,
           body: AddProfileView(
             context: globalState.navigatorKey.currentState!.context,
+            importUrl: importUrl,
           ),
           title: "${appLocalizations.add}${appLocalizations.profile}",
         );

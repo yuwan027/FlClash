@@ -15,6 +15,8 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:collection/collection.dart';
+import 'package:fl_clash/views/profiles/add_profile.dart';
 
 typedef OnSelected = void Function(int index);
 
@@ -80,6 +82,119 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
   Map<String, dynamic>? _subscriptionInfo;
   String? _subscriptionUrl;
 
+  Future<void> _importOrUpdateProfile(String url) async {
+    print('开始导入或更新订阅: $url');
+    final profiles = ref.read(profilesProvider);
+    print('当前已有配置数量: ${profiles.length}');
+    
+    final existProfile = profiles.firstWhereOrNull((p) => p.url == url);
+    print('是否找到已存在的配置: ${existProfile != null}');
+
+    try {
+      if (existProfile != null) {
+        print('找到已存在的配置: ${existProfile.label ?? existProfile.id}');
+        
+        // 检查上次更新时间
+        final lastUpdate = existProfile.lastUpdateDate;
+        if (lastUpdate != null) {
+          final now = DateTime.now();
+          final difference = now.difference(lastUpdate);
+          final days = difference.inDays;
+          
+          print('上次更新时间: $lastUpdate');
+          print('距离上次更新已过: $days 天');
+          
+          // 询问用户是否更新
+          if (!mounted) return;
+          
+          final shouldUpdate = await globalState.showMessage(
+            title: appLocalizations.tip,
+            message: TextSpan(
+              text: '发现新的订阅链接，是否更新？',
+            ),
+          );
+          
+          if (shouldUpdate != true) {
+            print('用户取消更新');
+            return;
+          }
+        }
+        
+        print('开始更新已存在的配置');
+        await _updateSingleProfile(existProfile);
+      } else {
+        print('开始创建新配置');
+        final profile = await Profile.normal(url: url).update();
+        print('配置创建成功: ${profile.label ?? profile.id}');
+        await globalState.appController.addProfile(profile);
+        print('配置添加成功');
+        if (mounted) {
+          context.showNotifier(appLocalizations.importSuccess);
+        }
+      }
+    } catch (e) {
+      print('导入/更新失败: $e');
+      if (mounted) {
+        context.showNotifier(e.toString());
+      }
+    }
+  }
+
+  Future<void> _updateSingleProfile(Profile profile) async {
+    print('开始更新单个配置: ${profile.label ?? profile.id}');
+    ref.read(profilesProvider.notifier).setProfile(profile.copyWith(isUpdating: true));
+    try {
+      print('调用 appController.updateProfile');
+      await globalState.appController.updateProfile(profile);
+      print('更新成功');
+      if (mounted) {
+        context.showNotifier(appLocalizations.updateSuccess);
+      }
+    } catch (e) {
+      print('更新失败: $e');
+      ref.read(profilesProvider.notifier).setProfile(profile.copyWith(isUpdating: false));
+      if (mounted) {
+        context.showNotifier(e.toString());
+      }
+    }
+  }
+
+  void _handleShowAddExtendPage({String? importUrl}) {
+    print('准备打开添加配置页面，importUrl: $importUrl');
+    if (!mounted) {
+      print('组件未挂载，无法打开页面');
+      return;
+    }
+
+    try {
+      showExtend(
+        context,
+        builder: (_, type) {
+          print('构建添加配置页面，type: $type');
+          return AdaptiveSheetScaffold(
+            type: type,
+            body: AddProfileView(
+              context: context,
+              importUrl: importUrl,
+            ),
+            title: "${appLocalizations.add}${appLocalizations.profile}",
+          );
+        },
+      );
+      print('添加配置页面已打开');
+    } catch (e) {
+      print('打开添加配置页面失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('打开添加配置页面失败：$e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -100,7 +215,12 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
     );
 
     // 使用 Future.microtask 延迟加载数据
-    Future.microtask(() => _loadInitialData());
+    Future.microtask(() => loadInitialData());
+
+    // 检查是否需要更新订阅链接
+    if (_subscriptionUrl != null) {
+      _importOrUpdateProfile(_subscriptionUrl!);
+    }
 
     ref.listenManual(currentPageLabelProvider, (prev, next) {
       if (prev != next) {
@@ -202,31 +322,20 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
     return difference <= 7;
   }
 
-  Future<void> _loadInitialData() async {
+  Future<void> loadInitialData() async {
     if (!mounted) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      // 显示加载对话框
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
-      }
-
       // 获取用户信息
+      print('开始获取用户信息');
       final userInfoResponse = await _httpHelper.getJson(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/info'),
       );
+      print('获取用户信息响应: ${userInfoResponse != null}');
 
-      if (userInfoResponse['data'] != null) {
+      if (userInfoResponse?['data'] != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_info', jsonEncode(userInfoResponse['data']));
         
@@ -236,32 +345,55 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
             _balance = _formatBalance(_userInfo!['balance']);
             _commission = _formatBalance(_userInfo!['commission_balance']);
           });
+          print('用户信息更新完成');
         }
       }
 
       // 获取订阅信息
+      print('开始获取订阅信息');
       final subscribeResponse = await _httpHelper.getJson(
         Uri.parse('${AppConfig.baseUrl}/api/v1/user/getSubscribe'),
       );
+      print('获取订阅信息响应: ${subscribeResponse != null}');
 
-      if (subscribeResponse['data'] != null) {
-        if (mounted) {
-          setState(() {
-            _subscriptionInfo = subscribeResponse['data'];
-          });
+      if (subscribeResponse?['data'] != null) {
+        if (!mounted) return;
 
-          // 检查是否需要更新订阅链接
-          final newSubscribeUrl = subscribeResponse['data']['subscribe_url'];
-          if (newSubscribeUrl != null && newSubscribeUrl != _subscriptionUrl) {
-            print('需要更新订阅链接');
-            print('新订阅链接: $newSubscribeUrl');
-            print('旧订阅链接: $_subscriptionUrl');
-            _subscriptionUrl = newSubscribeUrl;
-          }
+        setState(() {
+          _subscriptionInfo = subscribeResponse['data'];
+        });
+        print('订阅信息更新完成');
+
+        final newSubscribeUrl = subscribeResponse['data']['subscribe_url'] as String? ?? '';
+
+        if (newSubscribeUrl.isEmpty) {
+          print('订阅链接为空，无需处理');
+          return;
         }
-      }
 
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('last_subscribe_url', newSubscribeUrl);
+
+        // 读取本地所有 profiles
+        final profiles = ref.read(profilesProvider);
+        // 查找当前订阅链接对应的 Profile
+        Profile? currentProfile = profiles.firstWhereOrNull((p) => p.url == newSubscribeUrl);
+
+        // 如果没有对应的 profile，则新建一个
+        if (currentProfile == null) {
+          print('未找到对应的配置，创建新配置');
+          currentProfile = Profile.normal(label: '默认订阅', url: newSubscribeUrl);
+          // 添加新配置到状态中
+          await globalState.appController.addProfile(currentProfile);
+          print('新配置已添加到状态中');
+        }
+
+        // 强制执行订阅配置更新，无论本地是否存在
+        print('开始更新订阅配置');
+        await _updateProfileWithRetry(currentProfile);
+      }
     } catch (e) {
+      print('加载数据失败: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -272,11 +404,44 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        // 关闭加载对话框
-        Navigator.of(context).pop();
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _updateProfileWithRetry(Profile profile) async {
+    while (true) {
+      try {
+        // 显示正在更新提示
+        if (mounted) {
+          context.showNotifier(appLocalizations.updating);
+        }
+
+        // 直接使用 appController 更新配置，避免重复更新
+        await globalState.appController.updateProfile(profile);
+        print('配置更新成功');
+        
+        if (mounted) {
+          context.showNotifier(appLocalizations.updateSuccess);
+        }
+        break; // 更新成功，退出循环
+      } catch (e) {
+        print('更新订阅配置失败: $e');
+        if (!mounted) return;
+
+        // 询问用户是否重试
+        final shouldRetry = await globalState.showMessage(
+          title: appLocalizations.tip,
+          message: TextSpan(
+            text: '更新失败：$e\n是否重试？',
+          ),
+        );
+
+        if (shouldRetry != true) {
+          print('用户取消重试');
+          break; // 用户取消重试，退出循环
+        }
+        print('用户选择重试，开始新的更新尝试');
       }
     }
   }

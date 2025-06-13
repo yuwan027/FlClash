@@ -3,14 +3,86 @@ import 'package:fl_clash/pages/scan.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:fl_clash/models/models.dart';
 
-class AddProfileView extends StatelessWidget {
+class AddProfileView extends StatefulWidget {
   final BuildContext context;
+  final String? importUrl;
 
   const AddProfileView({
     super.key,
     required this.context,
+    this.importUrl
   });
+
+  @override
+  State<AddProfileView> createState() => _AddProfileViewState();
+}
+
+class _AddProfileViewState extends State<AddProfileView> {
+  final _formKey = GlobalKey<FormState>();
+  final _urlController = TextEditingController();
+  final _labelController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    print('AddProfileView initState, importUrl: ${widget.importUrl}');
+    if (widget.importUrl != null) {
+      _urlController.text = widget.importUrl!;
+      print('设置 URL 控制器文本: ${widget.importUrl}');
+      _importFromUrl(widget.importUrl!);
+    }
+  }
+
+  Future<void> _importFromUrl(String url) async {
+    print('开始从 URL 导入: $url');
+    if (!mounted) {
+      print('组件未挂载，取消导入');
+      return;
+    }
+    
+    setState(() {
+      _isLoading = true;
+    });
+    print('设置加载状态为 true');
+
+    try {
+      print('开始创建 Profile');
+      final profile = await Profile.normal(url: url).update();
+      print('Profile 创建成功: ${profile.label ?? profile.id}');
+      
+      if (!mounted) {
+        print('组件未挂载，取消后续操作');
+        return;
+      }
+      
+      print('开始添加 Profile');
+      await globalState.appController.addProfile(profile);
+      print('Profile 添加成功');
+      
+      Navigator.of(context).pop();
+      print('关闭添加配置页面');
+      
+      if (mounted) {
+        print('显示导入成功提示');
+        context.showNotifier(appLocalizations.importSuccess);
+      }
+    } catch (e) {
+      print('导入失败: $e');
+      if (mounted) {
+        context.showNotifier(e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        print('设置加载状态为 false');
+      }
+    }
+  }
 
   _handleAddProfileFormFile() async {
     globalState.appController.addProfileFormFile();
@@ -60,29 +132,54 @@ class AddProfileView extends StatelessWidget {
   }
 
   @override
-  Widget build(context) {
-    return ListView(
-      children: [
-        ListItem(
-          leading: const Icon(Icons.qr_code_sharp),
-          title: Text(appLocalizations.qrcode),
-          subtitle: Text(appLocalizations.qrcodeDesc),
-          onTap: _toScan,
-        ),
-        ListItem(
-          leading: const Icon(Icons.upload_file_sharp),
-          title: Text(appLocalizations.file),
-          subtitle: Text(appLocalizations.fileDesc),
-          onTap: _handleAddProfileFormFile,
-        ),
-        ListItem(
-          leading: const Icon(Icons.cloud_download_sharp),
-          title: Text(appLocalizations.url),
-          subtitle: Text(appLocalizations.urlDesc),
-          onTap: _toAdd,
-        )
-      ],
+  Widget build(BuildContext context) {
+    print('构建 AddProfileView');
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          TextFormField(
+            controller: _urlController,
+            decoration: InputDecoration(
+              labelText: appLocalizations.url,
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return appLocalizations.required;
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _labelController,
+            decoration: InputDecoration(
+              labelText: appLocalizations.label,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _isLoading ? null : () {
+              if (_formKey.currentState?.validate() ?? false) {
+                _importFromUrl(_urlController.text);
+              }
+            },
+            child: _isLoading
+                ? const CircularProgressIndicator()
+                : Text(appLocalizations.import),
+          ),
+        ],
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    print('AddProfileView dispose');
+    _urlController.dispose();
+    _labelController.dispose();
+    super.dispose();
   }
 }
 

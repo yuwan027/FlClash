@@ -407,5 +407,9 @@
   "import": "导入",
   "importFile": "通过文件导入",
   "importUrl": "通过URL导入",
-  "autoSetSystemDns": "自动设置系统DNS"
+  "autoSetSystemDns": "自动设置系统DNS",
+  "required": "必填项",
+  "label": "标签",
+  "updateSuccess": "更新成功",
+  "importSuccess": "导入成功"
 }

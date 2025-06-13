@@ -3139,6 +3139,18 @@ class AppLocalizations {
       args: [],
     );
   }
+
+  String get updateSuccess => '更新成功';
+  String get importSuccess => '导入成功';
+
+  String get required => '必填项';
+  String get label => '标签';
+
+  String get updating => Intl.message(
+    'updating',
+    name: 'updating',
+    desc: '正在更新',
+  );
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {
