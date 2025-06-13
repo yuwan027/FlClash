@@ -26,10 +26,15 @@ mixin PageMixin<T extends StatefulWidget> on State<T> {
   }
 
   initPageState() {
+    print('PageMixin.initPageState 被调用: ${widget.runtimeType}');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final commonScaffoldState = context.commonScaffoldState;
+      final fab = floatingActionButton;
+      print('  - commonScaffoldState: ${commonScaffoldState != null}');
+      print('  - floatingActionButton: ${fab.runtimeType} ($fab)');
+      
       commonScaffoldState?.actions = actions;
-      commonScaffoldState?.floatingActionButton = floatingActionButton;
+      commonScaffoldState?.floatingActionButton = fab;
       commonScaffoldState?.onKeywordsUpdate = onKeywordsUpdate;
       commonScaffoldState?.updateSearchState(
         (_) => onSearch != null

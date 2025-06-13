@@ -751,9 +751,7 @@ class _CommonNavigationBarState extends ConsumerState<CommonNavigationBar> {
                     },
                     extended: false,
                     selectedIndex: widget.currentIndex,
-                    labelType: showLabel
-                        ? NavigationRailLabelType.all
-                        : NavigationRailLabelType.none,
+                    labelType: NavigationRailLabelType.all,
                   ),
                 ),
               ),
@@ -867,20 +865,6 @@ class _CommonNavigationBarState extends ConsumerState<CommonNavigationBar> {
                 ],
               );
             },
-          ),
-          const SizedBox(height: 8),
-          // 流量趋势按钮
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TrafficLogPage(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.trending_up),
-            tooltip: '流量趋势',
           ),
           const SizedBox(height: 8),
           IconButton(

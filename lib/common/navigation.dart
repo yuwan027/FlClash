@@ -1,6 +1,7 @@
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/views/views.dart';
+import 'package:fl_clash/pages/traffic_log_page.dart';
 import 'package:flutter/material.dart';
 
 class Navigation {
@@ -39,6 +40,16 @@ class Navigation {
             PageLabel.profiles,
           ),
         ),
+      ),
+      const NavigationItem(
+        icon: Icon(Icons.trending_up),
+        label: PageLabel.traffic,
+        view: TrafficLogPage(
+          key: GlobalObjectKey(
+            PageLabel.traffic,
+          ),
+        ),
+        modes: [NavigationItemMode.desktop, NavigationItemMode.mobile],
       ),
       // const NavigationItem(
       //   icon: Icon(Icons.view_timeline),

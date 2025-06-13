@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_config.dart';
 import '../common/http_client.dart' hide jwtTokenProvider;
+import '../common/common.dart';
 import '../models/traffic_record.dart';
 import '../providers/auth_provider.dart';
+import '../providers/providers.dart';
+import '../enum/enum.dart';
 import 'dart:math' as math;
 
 // 流量数据点
@@ -186,7 +189,7 @@ class TrafficLogPage extends ConsumerStatefulWidget {
   ConsumerState<TrafficLogPage> createState() => _TrafficLogPageState();
 }
 
-class _TrafficLogPageState extends ConsumerState<TrafficLogPage> {
+class _TrafficLogPageState extends ConsumerState<TrafficLogPage> with PageMixin {
   bool _isLoading = true;
   List<TrafficRecord> _records = [];
   String? _error;
@@ -205,6 +208,17 @@ class _TrafficLogPageState extends ConsumerState<TrafficLogPage> {
         }
       },
     );
+    
+    ref.listenManual(
+      isCurrentPageProvider(PageLabel.traffic),
+      (prev, next) {
+        if (prev != next && next == true) {
+          initPageState();
+        }
+      },
+      fireImmediately: true,
+    );
+    
     _loadTrafficLog();
   }
 
@@ -213,6 +227,9 @@ class _TrafficLogPageState extends ConsumerState<TrafficLogPage> {
     _httpHelper.close();
     super.dispose();
   }
+
+  @override
+  Widget? get floatingActionButton => null;
 
   Future<void> _loadTrafficLog() async {
     setState(() {
@@ -420,19 +437,6 @@ class _TrafficLogPageState extends ConsumerState<TrafficLogPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('流量趋势'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadTrafficLog,
-          ),
-        ],
-      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null

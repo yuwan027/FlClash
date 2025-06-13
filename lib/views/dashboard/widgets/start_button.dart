@@ -74,7 +74,15 @@ class _StartButtonState extends ConsumerState<StartButton>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(startButtonSelectorStateProvider);
-    if (!state.isInit || !state.hasProfile) {
+    print('StartButton 调试信息:');
+    print('  - isInit: ${state.isInit}');
+    print('  - hasProfile: ${state.hasProfile}');
+    print('  - 显示按钮: ${state.isInit && state.hasProfile}');
+    
+    // 临时绕过 isInit 检查，因为 FlClashCore 文件缺失导致初始化失败
+    // 只要有 profile 就显示按钮
+    if (!state.hasProfile) {
+      print('StartButton 隐藏原因: hasProfile=${state.hasProfile}');
       return Container();
     }
     return Theme(

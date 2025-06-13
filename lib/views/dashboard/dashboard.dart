@@ -45,7 +45,10 @@ class _DashboardViewState extends ConsumerState<DashboardView> with PageMixin {
   }
 
   @override
-  Widget? get floatingActionButton => const StartButton();
+  Widget? get floatingActionButton {
+    print('DashboardView.floatingActionButton 被调用');
+    return const StartButton();
+  }
 
   Widget _buildIsEdit(_IsEditWidgetBuilder builder) {
     return ValueListenableBuilder(
