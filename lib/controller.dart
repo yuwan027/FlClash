@@ -543,6 +543,17 @@ class AppController {
     await applyProfile();
   }
 
+    Future<void> initCore() async {
+    final isInit = await clashCore.isInit;
+    if (!isInit) {
+      await clashCore.init();
+      await clashCore.setState(
+        globalState.getCoreState(),
+      );
+    }
+    await applyProfile();
+  }
+
   init() async {
     FlutterError.onError = (details) {
       commonPrint.log(details.stack.toString());

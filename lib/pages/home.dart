@@ -322,6 +322,9 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
     return difference <= 7;
   }
 
+// 订阅缓存
+String? _cachedSubscriptionUrl;
+
   Future<void> loadInitialData() async {
     if (!mounted) return;
 
@@ -379,18 +382,36 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
         // 查找当前订阅链接对应的 Profile
         Profile? currentProfile = profiles.firstWhereOrNull((p) => p.url == newSubscribeUrl);
 
-        // 如果没有对应的 profile，则新建一个
-        if (currentProfile == null) {
-          print('未找到对应的配置，创建新配置');
-          currentProfile = Profile.normal(label: '默认订阅', url: newSubscribeUrl);
-          // 添加新配置到状态中
-          await globalState.appController.addProfile(currentProfile);
-          print('新配置已添加到状态中');
-        }
+if (currentProfile == null) {
+  print('未找到对应的配置，创建新配置');
+  currentProfile = Profile.normal(label: '默认订阅', url: newSubscribeUrl);
+  await globalState.appController.addProfile(currentProfile);
+  print('新配置已添加到状态中');
 
-        // 强制执行订阅配置更新，无论本地是否存在
-        print('开始更新订阅配置');
-        await _updateProfileWithRetry(currentProfile);
+  // 新配置，强制更新
+  print('开始更新订阅配置（新配置）');
+  await _updateProfileWithRetry(currentProfile);
+} else {
+  // 已有配置，弹窗询问是否更新
+  final shouldUpdate = await globalState.showMessage(
+    title: appLocalizations.tip,
+    message: TextSpan(
+      text: '检测到已存在相同订阅配置，是否更新？',
+    ),
+    confirmText: '是',
+    cancelable: true,
+  );
+
+if (shouldUpdate == true) {
+  await _updateProfileWithRetry(currentProfile);  // 重新拉取更新
+} else {
+  print('用户取消更新，使用当前配置');
+  await globalState.appController.initCore();
+ // 即使不更新也刷新，让代理按钮显示出来
+}
+}
+
+
       }
     } catch (e) {
       print('加载数据失败: $e');
@@ -412,6 +433,7 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
   Future<void> _updateProfileWithRetry(Profile profile) async {
     while (true) {
       try {
+        print('当前配置: ${globalState.config.currentProfile}');
         // 显示正在更新提示
         if (mounted) {
           context.showNotifier(appLocalizations.updating);
@@ -420,7 +442,7 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
         // 直接使用 appController 更新配置，避免重复更新
         await globalState.appController.updateProfile(profile);
         print('配置更新成功');
-        
+        print('当前配置: ${globalState.config.currentProfile}');
         if (mounted) {
           context.showNotifier(appLocalizations.updateSuccess);
         }
