@@ -63,6 +63,7 @@ Future<void> _service(List<String> flags) async {
   vpn?.addListener(
     _VpnListenerWithService(
       onDnsChanged: (String dns) {
+        print("handle dns $dns");
         clashLibHandler.updateDns(dns);
       },
     ),
