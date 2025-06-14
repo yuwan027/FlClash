@@ -484,19 +484,34 @@ if (currentProfile == null) {
   print('开始更新订阅配置（新配置）');
   await _updateProfileWithRetry(currentProfile);
 } else {
-  // 已有配置，检查上次更新时间
+  // 已有配置，第一次登录时强制更新
   final lastUpdate = currentProfile.lastUpdateDate;
+  final prefs = await SharedPreferences.getInstance();
+  final hasEverUpdated = prefs.getBool('has_ever_updated_subscription') ?? false;
+  
   bool shouldAutoUpdate = false;
   
-  if (lastUpdate != null) {
+  // 如果从未更新过（第一次登录），强制更新
+  if (!hasEverUpdated) {
+    shouldAutoUpdate = true;
+    print('第一次登录，强制更新订阅');
+    await prefs.setBool('has_ever_updated_subscription', true);
+  } else if (lastUpdate != null) {
     final now = DateTime.now();
     final difference = now.difference(lastUpdate);
-    final hoursSinceUpdate = difference.inHours;
+    final minutesSinceUpdate = difference.inMinutes;
     
     print('距离上次更新已过: ${_formatTimeDifference(difference)}');
     
+    // 半小时内不更新，直接使用当前配置
+    if (minutesSinceUpdate < 30) {
+      print('距离上次更新不足30分钟，跳过更新');
+      await globalState.appController.initCore();
+      return;
+    }
+    
     // 超过3小时自动更新
-    if (hoursSinceUpdate >= 3) {
+    if (minutesSinceUpdate >= 180) { // 180分钟 = 3小时
       shouldAutoUpdate = true;
       print('超过3小时未更新，自动更新订阅');
     }
@@ -510,7 +525,7 @@ if (currentProfile == null) {
     // 直接更新，不询问用户
     await _updateProfileWithRetry(currentProfile);
   } else {
-    // 不到3小时，询问用户是否更新
+    // 30分钟到3小时之间，询问用户是否更新
     final now = DateTime.now();
     final difference = now.difference(lastUpdate!);
     final timeMessage = '距离上次更新已过: ${_formatTimeDifference(difference)}';
