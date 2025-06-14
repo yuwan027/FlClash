@@ -443,6 +443,8 @@ class AppController {
       system.exit();
     });
     try {
+      // 在退出前先关闭代理状态
+      await updateStatus(false);
       await savePreferences();
       await system.setMacOSDns(true);
       await proxy?.stopProxy();

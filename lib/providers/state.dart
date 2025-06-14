@@ -158,9 +158,11 @@ TrayState trayState(Ref ref) {
   final appSetting = ref.watch(
     appSettingProvider,
   );
-  final groups = ref.watch(
-    groupsProvider,
-  );
+  final groups = ref
+      .watch(
+        currentGroupsStateProvider,
+      )
+      .value;
   final brightness = ref.watch(
     appBrightnessProvider,
   );
