@@ -316,6 +316,63 @@ class _HomePageViewState extends ConsumerState<_HomePageView> {
     }
   }
 
+  /// 检查首次登录是否需要提示开启开机自启动
+  Future<void> _checkFirstLoginAutoStartup() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasShownAutoStartupDialog = prefs.getBool('has_shown_auto_startup_dialog') ?? false;
+      
+      // 如果已经显示过开机自启动对话框，则跳过
+      if (hasShownAutoStartupDialog) {
+        print('已显示过开机自启动对话框，跳过提示');
+        return;
+      }
+
+      // 检查当前是否已经开启了开机自启动
+      final currentAutoLaunch = ref.read(appSettingProvider).autoLaunch;
+      if (currentAutoLaunch) {
+        print('已开启开机自启动，标记为已显示过对话框');
+        await prefs.setBool('has_shown_auto_startup_dialog', true);
+        return;
+      }
+
+      // 显示开机自启动提示对话框
+      if (mounted) {
+        final shouldEnable = await globalState.showMessage(
+          title: '开机自启动',
+          message: const TextSpan(
+            text: '为了更好的使用体验，建议开启开机自启动功能。\n\n'
+                  '开启后应用将在系统启动时自动运行，您可以随时在设置中关闭此功能。',
+          ),
+          confirmText: '开启',
+          cancelable: true,
+        );
+
+        if (shouldEnable == true) {
+          // 用户选择开启，更新设置
+          ref.read(appSettingProvider.notifier).updateState(
+            (state) => state.copyWith(autoLaunch: true),
+          );
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('开机自启动已开启'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      }
+
+      // 标记为已显示过对话框
+      await prefs.setBool('has_shown_auto_startup_dialog', true);
+      print('首次登录开机自启动提示完成');
+    } catch (e) {
+      print('检查首次登录开机自启动失败: $e');
+    }
+  }
+
   String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
@@ -416,6 +473,9 @@ String? _cachedSubscriptionUrl;
       print('数据已加载过，跳过重复加载');
       return;
     }
+
+    // 首次登录检查是否需要提示开启开机自启动
+    await _checkFirstLoginAutoStartup();
 
     setState(() => _isLoading = true);
 
