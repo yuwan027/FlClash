@@ -504,112 +504,132 @@ String? _cachedSubscriptionUrl;
         }
       }
 
-      // 获取订阅信息
-      print('开始获取订阅信息');
-      final subscribeResponse = await _httpHelper.getJson(
-        Uri.parse('${AppConfig.baseUrl}/api/v1/user/getSubscribe'),
-      );
-      print('获取订阅信息响应: ${subscribeResponse != null}');
-
-      if (subscribeResponse?['data'] != null) {
-        if (!mounted) return;
-
-        setState(() {
-          _subscriptionInfo = subscribeResponse['data'];
-        });
-        print('订阅信息更新完成');
-
-        final newSubscribeUrl = subscribeResponse['data']['subscribe_url'] as String? ?? '';
-
-        if (newSubscribeUrl.isEmpty) {
-          print('订阅链接为空，无需处理');
-          return;
+      // 先检查本地配置，判断是否需要更新
+      final profiles = ref.read(profilesProvider);
+      final prefs = await SharedPreferences.getInstance();
+      final lastSubscribeUrl = prefs.getString('last_subscribe_url');
+      
+      // 如果有上次的订阅链接，先检查是否需要更新
+      Profile? existingProfile;
+      bool shouldSkipSubscriptionCheck = false;
+      
+      if (lastSubscribeUrl != null && lastSubscribeUrl.isNotEmpty) {
+        existingProfile = profiles.firstWhereOrNull((p) => p.url == lastSubscribeUrl);
+        
+        if (existingProfile != null) {
+          final lastUpdate = existingProfile.lastUpdateDate;
+          final hasEverUpdated = prefs.getBool('has_ever_updated_subscription') ?? false;
+          
+          // 如果有更新记录且距离上次更新不足30分钟，跳过订阅检查
+          if (hasEverUpdated && lastUpdate != null) {
+            final now = DateTime.now();
+            final difference = now.difference(lastUpdate);
+            final minutesSinceUpdate = difference.inMinutes;
+            
+            if (minutesSinceUpdate < 30) {
+              print('距离上次更新不足30分钟，跳过订阅检查');
+              shouldSkipSubscriptionCheck = true;
+              await globalState.appController.initCore();
+            }
+          }
         }
+      }
+      
+      // 如果不需要跳过，才获取订阅信息
+      if (!shouldSkipSubscriptionCheck) {
+        print('开始获取订阅信息');
+        final subscribeResponse = await _httpHelper.getJson(
+          Uri.parse('${AppConfig.baseUrl}/api/v1/user/getSubscribe'),
+        );
+        print('获取订阅信息响应: ${subscribeResponse != null}');
 
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('last_subscribe_url', newSubscribeUrl);
+        if (subscribeResponse?['data'] != null) {
+          if (!mounted) return;
 
-        // 读取本地所有 profiles
-        final profiles = ref.read(profilesProvider);
-        // 查找当前订阅链接对应的 Profile
-        Profile? currentProfile = profiles.firstWhereOrNull((p) => p.url == newSubscribeUrl);
+          setState(() {
+            _subscriptionInfo = subscribeResponse['data'];
+          });
+          print('订阅信息更新完成');
 
-if (currentProfile == null) {
-  print('未找到对应的配置，创建新配置');
-  currentProfile = Profile.normal(label: '默认订阅', url: newSubscribeUrl);
-  await globalState.appController.addProfile(currentProfile);
-  print('新配置已添加到状态中');
+          final newSubscribeUrl = subscribeResponse['data']['subscribe_url'] as String? ?? '';
 
-  // 新配置，强制更新
-  print('开始更新订阅配置（新配置）');
-  await _updateProfileWithRetry(currentProfile);
-} else {
-  // 已有配置，第一次登录时强制更新
-  final lastUpdate = currentProfile.lastUpdateDate;
-  final prefs = await SharedPreferences.getInstance();
-  final hasEverUpdated = prefs.getBool('has_ever_updated_subscription') ?? false;
-  
-  bool shouldAutoUpdate = false;
-  
-  // 如果从未更新过（第一次登录），强制更新
-  if (!hasEverUpdated) {
-    shouldAutoUpdate = true;
-    print('第一次登录，强制更新订阅');
-    await prefs.setBool('has_ever_updated_subscription', true);
-  } else if (lastUpdate != null) {
-    final now = DateTime.now();
-    final difference = now.difference(lastUpdate);
-    final minutesSinceUpdate = difference.inMinutes;
-    
-    print('距离上次更新已过: ${_formatTimeDifference(difference)}');
-    
-    // 半小时内不更新，直接使用当前配置
-    if (minutesSinceUpdate < 30) {
-      print('距离上次更新不足30分钟，跳过更新');
-      await globalState.appController.initCore();
-      return;
-    }
-    
-    // 超过3小时自动更新
-    if (minutesSinceUpdate >= 180) { // 180分钟 = 3小时
-      shouldAutoUpdate = true;
-      print('超过3小时未更新，自动更新订阅');
-    }
-  } else {
-    // 没有更新记录，自动更新
-    shouldAutoUpdate = true;
-    print('没有更新记录，自动更新订阅');
-  }
-  
-  if (shouldAutoUpdate) {
-    // 直接更新，不询问用户
-    await _updateProfileWithRetry(currentProfile);
-  } else {
-    // 30分钟到3小时之间，询问用户是否更新
-    final now = DateTime.now();
-    final difference = now.difference(lastUpdate!);
-    final timeMessage = '距离上次更新已过: ${_formatTimeDifference(difference)}';
-    
-    final shouldUpdate = await globalState.showMessage(
-      title: appLocalizations.tip,
-      message: TextSpan(
-        text: '$timeMessage，是否更新？',
-      ),
-      confirmText: '是',
-      cancelable: true,
-    );
+          if (newSubscribeUrl.isEmpty) {
+            print('订阅链接为空，无需处理');
+            return;
+          }
 
-    if (shouldUpdate == true) {
-      await _updateProfileWithRetry(currentProfile);
-    } else {
-      print('用户取消更新，使用当前配置');
-      await globalState.appController.initCore();
-      // 即使不更新也刷新，让代理按钮显示出来
-    }
-  }
-}
+          await prefs.setString('last_subscribe_url', newSubscribeUrl);
 
+          // 重新查找配置（可能订阅链接已变更）
+          Profile? currentProfile = profiles.firstWhereOrNull((p) => p.url == newSubscribeUrl);
 
+          if (currentProfile == null) {
+            print('未找到对应的配置，创建新配置');
+            currentProfile = Profile.normal(label: '默认订阅', url: newSubscribeUrl);
+            await globalState.appController.addProfile(currentProfile);
+            print('新配置已添加到状态中');
+
+            // 新配置，强制更新
+            print('开始更新订阅配置（新配置）');
+            await _updateProfileWithRetry(currentProfile);
+          } else {
+            // 已有配置，第一次登录时强制更新
+            final lastUpdate = currentProfile.lastUpdateDate;
+            final hasEverUpdated = prefs.getBool('has_ever_updated_subscription') ?? false;
+            
+            bool shouldAutoUpdate = false;
+            
+            // 如果从未更新过（第一次登录），强制更新
+            if (!hasEverUpdated) {
+              shouldAutoUpdate = true;
+              print('第一次登录，强制更新订阅');
+              await prefs.setBool('has_ever_updated_subscription', true);
+            } else if (lastUpdate != null) {
+              final now = DateTime.now();
+              final difference = now.difference(lastUpdate);
+              final minutesSinceUpdate = difference.inMinutes;
+              
+              print('距离上次更新已过: ${_formatTimeDifference(difference)}');
+              
+              // 超过3小时自动更新
+              if (minutesSinceUpdate >= 180) { // 180分钟 = 3小时
+                shouldAutoUpdate = true;
+                print('超过3小时未更新，自动更新订阅');
+              }
+            } else {
+              // 没有更新记录，自动更新
+              shouldAutoUpdate = true;
+              print('没有更新记录，自动更新订阅');
+            }
+            
+            if (shouldAutoUpdate) {
+              // 直接更新，不询问用户
+              await _updateProfileWithRetry(currentProfile);
+            } else {
+              // 30分钟到3小时之间，询问用户是否更新
+              final now = DateTime.now();
+              final difference = now.difference(lastUpdate!);
+              final timeMessage = '距离上次更新已过: ${_formatTimeDifference(difference)}';
+              
+              final shouldUpdate = await globalState.showMessage(
+                title: appLocalizations.tip,
+                message: TextSpan(
+                  text: '$timeMessage，是否更新？',
+                ),
+                confirmText: '是',
+                cancelable: true,
+              );
+
+              if (shouldUpdate == true) {
+                await _updateProfileWithRetry(currentProfile);
+              } else {
+                print('用户取消更新，使用当前配置');
+                await globalState.appController.initCore();
+                // 即使不更新也刷新，让代理按钮显示出来
+              }
+            }
+          }
+        }
       }
     } catch (e) {
       print('加载数据失败: $e');
